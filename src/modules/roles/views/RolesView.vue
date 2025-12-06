@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { usePermissions } from '@/modules/auth'
 import { rolesService } from '../services/rolesService'
+import RoleModal from '../components/RoleModal.vue'
 
 // Permisos
 const { canCreate, canUpdate, canDelete } = usePermissions()
@@ -10,6 +11,8 @@ const { canCreate, canUpdate, canDelete } = usePermissions()
 const roles = ref([])
 const isLoading = ref(true)
 const error = ref(null)
+const isModalOpen = ref(false)
+const editingRoleId = ref(null)
 
 // Cargar roles
 const loadRoles = async () => {
@@ -26,15 +29,25 @@ const loadRoles = async () => {
   }
 }
 
-// Acciones (por ahora solo logs)
+// Acciones
 const handleAddRole = () => {
-  console.log('Agregar rol')
-  // TODO: Implementar
+  editingRoleId.value = null
+  isModalOpen.value = true
 }
 
 const handleEditRole = (role) => {
-  console.log('Editar rol:', role)
-  // TODO: Implementar
+  editingRoleId.value = role._id
+  isModalOpen.value = true
+}
+
+const handleModalSuccess = async () => {
+  // Recargar lista de roles
+  await loadRoles()
+}
+
+const handleCloseModal = () => {
+  isModalOpen.value = false
+  editingRoleId.value = null
 }
 
 const handleDeleteRole = (role) => {
@@ -152,43 +165,45 @@ onMounted(() => {
 
               <!-- Acciones -->
               <td class="actions-cell">
-                <!-- Botón Editar -->
-                <button 
-                  v-if="canUpdate('roles')"
-                  class="action-btn edit"
-                  @click="handleEditRole(role)"
-                  title="Editar rol"
-                  :disabled="role.isSystem"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
+                <div class="actions-wrapper">
+                  <!-- Botón Editar -->
+                  <button 
+                    v-if="canUpdate('roles')"
+                    class="action-btn edit"
+                    @click="handleEditRole(role)"
+                    title="Editar rol"
+                    :disabled="role.isSystem"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
 
-                <!-- Botón Eliminar -->
-                <button 
-                  v-if="canDelete('roles')"
-                  class="action-btn delete"
-                  @click="handleDeleteRole(role)"
-                  title="Eliminar rol"
-                  :disabled="role.isSystem"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                    <line x1="14" y1="11" x2="14" y2="17"></line>
-                  </svg>
-                </button>
+                  <!-- Botón Eliminar -->
+                  <button 
+                    v-if="canDelete('roles')"
+                    class="action-btn delete"
+                    @click="handleDeleteRole(role)"
+                    title="Eliminar rol"
+                    :disabled="role.isSystem"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      <line x1="10" y1="11" x2="10" y2="17"></line>
+                      <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                  </button>
 
-                <!-- Sin acciones disponibles -->
-                <span 
-                  v-if="!canUpdate('roles') && !canDelete('roles')"
-                  class="no-actions"
-                >
-                  -
-                </span>
+                  <!-- Sin acciones disponibles -->
+                  <span 
+                    v-if="!canUpdate('roles') && !canDelete('roles')"
+                    class="no-actions"
+                  >
+                    -
+                  </span>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -205,6 +220,14 @@ onMounted(() => {
         </small>
       </div>
     </div>
+
+    <!-- Modal de Rol (Crear/Editar) -->
+    <RoleModal
+      :is-open="isModalOpen"
+      :role-id="editingRoleId"
+      @close="handleCloseModal"
+      @success="handleModalSuccess"
+    />
   </div>
 </template>
 
@@ -401,13 +424,19 @@ onMounted(() => {
 
 .actions-cell {
   text-align: center !important;
+  padding: 1rem 1.25rem !important;
+  vertical-align: middle;
+}
+
+.actions-wrapper {
   display: flex;
+  align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
 }
 
 .action-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 36px;
@@ -416,6 +445,14 @@ onMounted(() => {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.action-btn svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 .action-btn:disabled {
@@ -445,6 +482,7 @@ onMounted(() => {
 
 .no-actions {
   color: var(--color-text-muted);
+  display: inline-block;
 }
 
 /* Empty Row */

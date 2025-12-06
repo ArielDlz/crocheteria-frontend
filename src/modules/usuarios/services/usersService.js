@@ -22,7 +22,9 @@ export const usersService = {
    */
   async getUserById(id) {
     const response = await api.get(`/users/${id}`)
-    return response.user || response
+    // El backend puede devolver { user: {...} } o directamente el usuario
+    const user = response.user || response
+    return user
   },
 
   /**
@@ -42,7 +44,7 @@ export const usersService = {
    * @returns {Promise<Object>} Usuario actualizado
    */
   async updateUser(id, userData) {
-    const response = await api.put(`/users/${id}`, userData)
+    const response = await api.patch(`/users/${id}`, userData)
     return response
   },
 

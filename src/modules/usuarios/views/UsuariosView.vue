@@ -2,7 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { usePermissions } from '@/modules/auth'
 import { usersService } from '../services/usersService'
-import CreateUserModal from '../components/CreateUserModal.vue'
+import UserModal from '../components/UserModal.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 
 // Permisos
 const { canCreate, canUpdate, canDelete } = usePermissions()
@@ -11,7 +12,11 @@ const { canCreate, canUpdate, canDelete } = usePermissions()
 const users = ref([])
 const isLoading = ref(true)
 const error = ref(null)
-const isCreateModalOpen = ref(false)
+const isModalOpen = ref(false)
+const editingUserId = ref(null)
+const isDeleteDialogOpen = ref(false)
+const userToDelete = ref(null)
+const isDeleting = ref(false)
 
 // Cargar usuarios
 const loadUsers = async () => {
@@ -41,26 +46,58 @@ const formatDate = (dateString) => {
 
 // Acciones
 const handleAddUser = () => {
-  isCreateModalOpen.value = true
+  editingUserId.value = null
+  isModalOpen.value = true
 }
 
-const handleCreateSuccess = async (userData) => {
+const handleEditUser = (user) => {
+  editingUserId.value = user._id
+  isModalOpen.value = true
+}
+
+const handleModalSuccess = async () => {
   // Recargar lista de usuarios
   await loadUsers()
 }
 
 const handleCloseModal = () => {
-  isCreateModalOpen.value = false
-}
-
-const handleEditUser = (user) => {
-  console.log('Editar usuario:', user)
-  // TODO: Implementar
+  isModalOpen.value = false
+  editingUserId.value = null
 }
 
 const handleDeleteUser = (user) => {
-  console.log('Eliminar usuario:', user)
-  // TODO: Implementar
+  userToDelete.value = user
+  isDeleteDialogOpen.value = true
+}
+
+const confirmDelete = async () => {
+  if (!userToDelete.value) return
+
+  isDeleting.value = true
+  
+  try {
+    await usersService.deleteUser(userToDelete.value._id)
+    
+    // Recargar lista de usuarios
+    await loadUsers()
+    
+    // Cerrar diálogo
+    isDeleteDialogOpen.value = false
+    userToDelete.value = null
+  } catch (err) {
+    console.error('Error al eliminar usuario:', err)
+    error.value = err.message || 'Error al eliminar el usuario'
+    // Cerrar diálogo incluso si hay error
+    isDeleteDialogOpen.value = false
+    userToDelete.value = null
+  } finally {
+    isDeleting.value = false
+  }
+}
+
+const closeDeleteDialog = () => {
+  isDeleteDialogOpen.value = false
+  userToDelete.value = null
 }
 
 // Cargar datos al montar
@@ -127,13 +164,16 @@ onMounted(() => {
               </td>
             </tr>
             <tr v-for="user in users" :key="user._id">
-              <!-- Usuario (Email + Avatar) -->
+              <!-- Usuario (Nombre + Email + Avatar) -->
               <td>
                 <div class="user-cell">
                   <div class="user-avatar">
-                    {{ user.email?.charAt(0).toUpperCase() || 'U' }}
+                    {{ (user.name?.charAt(0) || user.email?.charAt(0) || 'U').toUpperCase() }}
                   </div>
                   <div class="user-info">
+                    <span class="user-name" v-if="user.name || user.family_name || user.familyName">
+                      {{ [user.name, user.family_name || user.familyName].filter(Boolean).join(' ') }}
+                    </span>
                     <span class="user-email">{{ user.email }}</span>
                     <span class="user-id">ID: {{ user._id.slice(-6) }}</span>
                   </div>
@@ -167,41 +207,43 @@ onMounted(() => {
 
               <!-- Acciones -->
               <td class="actions-cell">
-                <!-- Botón Editar -->
-                <button 
-                  v-if="canUpdate('users')"
-                  class="action-btn edit"
-                  @click="handleEditUser(user)"
-                  title="Editar usuario"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
+                <div class="actions-wrapper">
+                  <!-- Botón Editar -->
+                  <button 
+                    v-if="canUpdate('users')"
+                    class="action-btn edit"
+                    @click="handleEditUser(user)"
+                    title="Editar usuario"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
 
-                <!-- Botón Eliminar -->
-                <button 
-                  v-if="canDelete('users')"
-                  class="action-btn delete"
-                  @click="handleDeleteUser(user)"
-                  title="Eliminar usuario"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                    <line x1="14" y1="11" x2="14" y2="17"></line>
-                  </svg>
-                </button>
+                  <!-- Botón Eliminar -->
+                  <button 
+                    v-if="canDelete('users')"
+                    class="action-btn delete"
+                    @click="handleDeleteUser(user)"
+                    title="Eliminar usuario"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      <line x1="10" y1="11" x2="10" y2="17"></line>
+                      <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                  </button>
 
-                <!-- Sin acciones disponibles -->
-                <span 
-                  v-if="!canUpdate('users') && !canDelete('users')"
-                  class="no-actions"
-                >
-                  -
-                </span>
+                  <!-- Sin acciones disponibles -->
+                  <span 
+                    v-if="!canUpdate('users') && !canDelete('users')"
+                    class="no-actions"
+                  >
+                    -
+                  </span>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -219,11 +261,24 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Modal de Crear Usuario -->
-    <CreateUserModal
-      :is-open="isCreateModalOpen"
+    <!-- Modal de Usuario (Crear/Editar) -->
+    <UserModal
+      :is-open="isModalOpen"
+      :user-id="editingUserId"
       @close="handleCloseModal"
-      @success="handleCreateSuccess"
+      @success="handleModalSuccess"
+    />
+
+    <!-- Diálogo de Confirmación para Eliminar -->
+    <ConfirmDialog
+      :is-open="isDeleteDialogOpen"
+      title="Eliminar Usuario"
+      :message="`¿Estás seguro de que deseas eliminar al usuario ${userToDelete?.email || ''}? Esta acción no se puede deshacer.`"
+      confirm-text="Eliminar"
+      cancel-text="Cancelar"
+      variant="danger"
+      @close="closeDeleteDialog"
+      @confirm="confirmDelete"
     />
   </div>
 </template>
@@ -359,9 +414,17 @@ onMounted(() => {
   flex-direction: column;
 }
 
+.user-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+  margin-bottom: 0.15rem;
+}
+
 .user-email {
   font-weight: 500;
   color: var(--color-text-primary);
+  font-size: 0.9rem;
 }
 
 .user-id {
@@ -419,16 +482,19 @@ onMounted(() => {
 
 .actions-cell {
   text-align: center !important;
+  padding: 1rem 1.25rem !important;
+  vertical-align: middle;
 }
 
-.actions-cell {
+.actions-wrapper {
   display: flex;
+  align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
 }
 
 .action-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 36px;
@@ -437,6 +503,14 @@ onMounted(() => {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.action-btn svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 .action-btn.edit {
@@ -461,6 +535,7 @@ onMounted(() => {
 
 .no-actions {
   color: var(--color-text-muted);
+  display: inline-block;
 }
 
 /* Empty Row */

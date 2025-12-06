@@ -142,19 +142,32 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.modal-close svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
 }
 
 .modal-close:hover {
   background: var(--color-background);
   color: var(--color-text-primary);
+}
+
+.modal-close:active {
+  transform: scale(0.95);
 }
 
 .modal-content {

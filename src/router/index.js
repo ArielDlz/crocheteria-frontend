@@ -74,6 +74,12 @@ const routes = [
         component: () => import('@/modules/roles/views/RolesView.vue'),
         meta: { title: 'Roles' }
       },
+      {
+        path: 'usuarios/permisos',
+        name: 'Permisos',
+        component: () => import('@/modules/permisos/views/PermisosView.vue'),
+        meta: { title: 'Permisos' }
+      },
     ]
   },
 
