@@ -26,10 +26,22 @@ const props = defineProps({
     type: String,
     default: 'danger', // danger, warning, info
     validator: (value) => ['danger', 'warning', 'info'].includes(value)
+  },
+  type: {
+    type: String,
+    default: 'danger', // alias de variant para compatibilidad
+    validator: (value) => ['danger', 'warning', 'info'].includes(value)
+  },
+  isLoading: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['close', 'confirm'])
+// Usar type como fallback de variant
+const effectiveVariant = props.variant !== 'danger' ? props.variant : props.type
+
+const emit = defineEmits(['close', 'confirm', 'cancel'])
 
 const handleConfirm = () => {
   emit('confirm')
@@ -37,6 +49,7 @@ const handleConfirm = () => {
 
 const handleClose = () => {
   emit('close')
+  emit('cancel') // Emitir ambos para compatibilidad
 }
 </script>
 
@@ -48,13 +61,13 @@ const handleClose = () => {
     @close="handleClose"
   >
     <div class="confirm-dialog">
-      <div class="confirm-icon" :class="variant">
-        <svg v-if="variant === 'danger'" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <div class="confirm-icon" :class="effectiveVariant">
+        <svg v-if="effectiveVariant === 'danger'" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="8" x2="12" y2="12"></line>
           <line x1="12" y1="16" x2="12.01" y2="16"></line>
         </svg>
-        <svg v-else-if="variant === 'warning'" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg v-else-if="effectiveVariant === 'warning'" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
           <line x1="12" y1="9" x2="12" y2="13"></line>
           <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -74,16 +87,19 @@ const handleClose = () => {
         type="button" 
         class="btn-outline" 
         @click="handleClose"
+        :disabled="isLoading"
       >
         {{ cancelText }}
       </button>
       <button 
         type="button" 
         class="btn-primary"
-        :class="{ 'btn-danger': variant === 'danger' }"
+        :class="{ 'btn-danger': effectiveVariant === 'danger' }"
         @click="handleConfirm"
+        :disabled="isLoading"
       >
-        {{ confirmText }}
+        <span v-if="isLoading" class="spinner-small"></span>
+        <span v-else>{{ confirmText }}</span>
       </button>
     </template>
   </Modal>
@@ -140,6 +156,25 @@ const handleClose = () => {
   background: var(--color-error) !important;
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(229, 62, 62, 0.35);
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
 
