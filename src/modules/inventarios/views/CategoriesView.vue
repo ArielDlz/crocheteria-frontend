@@ -1,95 +1,78 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { usePermissions } from '@/modules/auth'
-import { usersService } from '../services/usersService'
-import UserModal from '../components/UserModal.vue'
+import { categoriesService } from '../services/categoriesService'
+import CategoryModal from '../components/CategoryModal.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 
 // Permisos
 const { canCreate, canUpdate, canDelete } = usePermissions()
 
 // Estado
-const users = ref([])
+const categories = ref([])
 const isLoading = ref(true)
 const error = ref(null)
 const isModalOpen = ref(false)
-const editingUserId = ref(null)
+const editingCategoryId = ref(null)
 const isDeleteDialogOpen = ref(false)
-const userToDelete = ref(null)
+const categoryToDelete = ref(null)
 const isDeleting = ref(false)
 
-// Cargar usuarios
-const loadUsers = async () => {
+// Cargar categorías
+const loadCategories = async () => {
   isLoading.value = true
   error.value = null
   
   try {
-    users.value = await usersService.getUsers()
+    categories.value = await categoriesService.getCategories()
   } catch (err) {
-    console.error('Error al cargar usuarios:', err)
-    error.value = err.message || 'Error al cargar los usuarios'
+    console.error('Error al cargar categorías:', err)
+    error.value = err.message || 'Error al cargar las categorías'
   } finally {
     isLoading.value = false
   }
 }
 
-// Formatear fecha
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  return date.toLocaleDateString('es-MX', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
-
 // Acciones
-const handleAddUser = () => {
-  editingUserId.value = null
+const handleAddCategory = () => {
+  editingCategoryId.value = null
   isModalOpen.value = true
 }
 
-const handleEditUser = (user) => {
-  editingUserId.value = user._id
+const handleEditCategory = (category) => {
+  editingCategoryId.value = category._id
   isModalOpen.value = true
 }
 
 const handleModalSuccess = async () => {
-  // Recargar lista de usuarios
-  await loadUsers()
+  await loadCategories()
 }
 
 const handleCloseModal = () => {
   isModalOpen.value = false
-  editingUserId.value = null
+  editingCategoryId.value = null
 }
 
-const handleDeleteUser = (user) => {
-  userToDelete.value = user
+const handleDeleteCategory = (category) => {
+  categoryToDelete.value = category
   isDeleteDialogOpen.value = true
 }
 
 const confirmDelete = async () => {
-  if (!userToDelete.value) return
+  if (!categoryToDelete.value) return
 
   isDeleting.value = true
   
   try {
-    await usersService.deleteUser(userToDelete.value._id)
-    
-    // Recargar lista de usuarios
-    await loadUsers()
-    
-    // Cerrar diálogo
+    await categoriesService.deleteCategory(categoryToDelete.value._id)
+    await loadCategories()
     isDeleteDialogOpen.value = false
-    userToDelete.value = null
+    categoryToDelete.value = null
   } catch (err) {
-    console.error('Error al eliminar usuario:', err)
-    error.value = err.message || 'Error al eliminar el usuario'
-    // Cerrar diálogo incluso si hay error
+    console.error('Error al eliminar categoría:', err)
+    error.value = err.message || 'Error al eliminar la categoría'
     isDeleteDialogOpen.value = false
-    userToDelete.value = null
+    categoryToDelete.value = null
   } finally {
     isDeleting.value = false
   }
@@ -97,35 +80,35 @@ const confirmDelete = async () => {
 
 const closeDeleteDialog = () => {
   isDeleteDialogOpen.value = false
-  userToDelete.value = null
+  categoryToDelete.value = null
 }
 
 // Cargar datos al montar
 onMounted(() => {
-  loadUsers()
+  loadCategories()
 })
 </script>
 
 <template>
-  <div class="users-page">
+  <div class="categories-page">
     <!-- Header -->
     <header class="page-header">
       <div class="header-info">
-        <h1>👥 Usuarios</h1>
-        <p>Gestiona los usuarios del sistema</p>
+        <h1>🏷️ Categorías de Productos</h1>
+        <p>Gestiona las categorías para organizar tus productos</p>
       </div>
       
-      <!-- Botón Agregar (solo si tiene permiso) -->
+      <!-- Botón Agregar -->
       <button 
-        v-if="canCreate('users')"
+        v-if="canCreate('inventory')"
         class="btn-primary"
-        @click="handleAddUser"
+        @click="handleAddCategory"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
-        Nuevo Usuario
+        Nueva Categoría
       </button>
     </header>
 
@@ -134,75 +117,85 @@ onMounted(() => {
       <!-- Loading -->
       <div v-if="isLoading" class="loading-state">
         <div class="spinner"></div>
-        <p>Cargando usuarios...</p>
+        <p>Cargando categorías...</p>
       </div>
 
       <!-- Error -->
       <div v-else-if="error" class="error-state">
         <span class="error-icon">⚠️</span>
         <p>{{ error }}</p>
-        <button class="btn-secondary" @click="loadUsers">Reintentar</button>
+        <button class="btn-secondary" @click="loadCategories">Reintentar</button>
       </div>
 
-      <!-- Tabla de usuarios -->
+      <!-- Tabla de categorías -->
       <div v-else class="table-container">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Usuario</th>
-              <th>Rol</th>
-              <th>Estado</th>
-              <th>Fecha de creación</th>
+              <th>Nombre</th>
+              <th>Descripción</th>
+              <th>Comisión</th>
+              <th>Monto de la comisión</th>
+              <th>Emprendimiento</th>
+              <th>Nombre del emprendimiento</th>
               <th class="actions-column">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="users.length === 0">
-              <td colspan="5" class="empty-row">
-                <span class="empty-icon">📭</span>
-                <p>No hay usuarios registrados</p>
-              </td>
-            </tr>
-            <tr v-for="user in users" :key="user._id">
-              <!-- Usuario (Nombre + Email + Avatar) -->
-              <td>
-                <div class="user-cell">
-                  <div class="user-avatar">
-                    {{ (user.name?.charAt(0) || user.email?.charAt(0) || 'U').toUpperCase() }}
-                  </div>
-                  <div class="user-info">
-                    <span class="user-name" v-if="user.name || user.family_name || user.familyName">
-                      {{ [user.name, user.family_name || user.familyName].filter(Boolean).join(' ') }}
-                    </span>
-                    <span class="user-email">{{ user.email }}</span>
-                    <span class="user-id">ID: {{ user._id.slice(-6) }}</span>
-                  </div>
+            <tr v-if="categories.length === 0">
+              <td colspan="7" class="empty-row">
+                <div class="empty-state-inline">
+                  <span>📭</span>
+                  <p>No hay categorías registradas</p>
                 </div>
               </td>
+            </tr>
+            <tr v-for="category in categories" :key="category._id">
+              <!-- Nombre -->
+              <td>
+                <span class="category-name">{{ category.name }}</span>
+              </td>
 
-              <!-- Rol -->
+              <!-- Descripción -->
+              <td>
+                <span class="description-text">{{ category.description || '-' }}</span>
+              </td>
+
+              <!-- Comisión -->
               <td>
                 <span 
-                  class="role-badge"
-                  :class="{ 'super-admin': user.role?.isSuperAdmin }"
+                  class="toggle-badge"
+                  :class="category.comision ? 'active' : 'inactive'"
                 >
-                  {{ user.role?.name || 'Sin rol' }}
+                  {{ category.comision ? 'Sí' : 'No' }}
                 </span>
               </td>
 
-              <!-- Estado -->
+              <!-- Monto de la comisión -->
+              <td>
+                <template v-if="category.comision && category.comision_ammount">
+                  <span class="amount-text">{{ category.comision_ammount }}</span>
+                  <span class="currency-text">{{ category.comision_type === 'Porcentaje' ? ' %' : ' MXN' }}</span>
+                </template>
+                <span v-else class="text-muted">-</span>
+              </td>
+
+              <!-- Startup -->
               <td>
                 <span 
-                  class="status-badge"
-                  :class="user.isActive ? 'active' : 'inactive'"
+                  class="toggle-badge"
+                  :class="category.startup ? 'active' : 'inactive'"
                 >
-                  {{ user.isActive ? 'Activo' : 'Inactivo' }}
+                  {{ category.startup ? 'Sí' : 'No' }}
                 </span>
               </td>
 
-              <!-- Fecha de creación -->
+              <!-- Nombre Startup -->
               <td>
-                <span class="date-text">{{ formatDate(user.createdAt) }}</span>
+                <span v-if="category.startup" class="startup-name">
+                  {{ category.startup_name || '-' }}
+                </span>
+                <span v-else class="text-muted">-</span>
               </td>
 
               <!-- Acciones -->
@@ -210,10 +203,10 @@ onMounted(() => {
                 <div class="actions-wrapper">
                   <!-- Botón Editar -->
                   <button 
-                    v-if="canUpdate('users')"
+                    v-if="canUpdate('inventory')"
                     class="action-btn edit"
-                    @click="handleEditUser(user)"
-                    title="Editar usuario"
+                    @click="handleEditCategory(category)"
+                    title="Editar categoría"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -223,10 +216,10 @@ onMounted(() => {
 
                   <!-- Botón Eliminar -->
                   <button 
-                    v-if="canDelete('users')"
+                    v-if="canDelete('inventory')"
                     class="action-btn delete"
-                    @click="handleDeleteUser(user)"
-                    title="Eliminar usuario"
+                    @click="handleDeleteCategory(category)"
+                    title="Eliminar categoría"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="3 6 5 6 21 6"></polyline>
@@ -238,7 +231,7 @@ onMounted(() => {
 
                   <!-- Sin acciones disponibles -->
                   <span 
-                    v-if="!canUpdate('users') && !canDelete('users')"
+                    v-if="!canUpdate('inventory') && !canDelete('inventory')"
                     class="no-actions"
                   >
                     -
@@ -249,22 +242,12 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
-
-      <!-- Info de permisos (para debug, puedes quitarlo después) -->
-      <div class="permissions-debug">
-        <small>
-          Permisos: 
-          <span :class="canCreate('users') ? 'has' : 'no'">crear</span> |
-          <span :class="canUpdate('users') ? 'has' : 'no'">editar</span> |
-          <span :class="canDelete('users') ? 'has' : 'no'">eliminar</span>
-        </small>
-      </div>
     </div>
 
-    <!-- Modal de Usuario (Crear/Editar) -->
-    <UserModal
+    <!-- Modal de Crear/Editar -->
+    <CategoryModal
       :is-open="isModalOpen"
-      :user-id="editingUserId"
+      :category-id="editingCategoryId"
       @close="handleCloseModal"
       @success="handleModalSuccess"
     />
@@ -272,19 +255,20 @@ onMounted(() => {
     <!-- Diálogo de Confirmación para Eliminar -->
     <ConfirmDialog
       :is-open="isDeleteDialogOpen"
-      title="Eliminar Usuario"
-      :message="`¿Estás seguro de que deseas eliminar al usuario ${userToDelete?.email || ''}? Esta acción no se puede deshacer.`"
+      title="Eliminar Categoría"
+      :message="`¿Estás seguro de que deseas eliminar la categoría '${categoryToDelete?.name}'? Esta acción no se puede deshacer.`"
       confirm-text="Eliminar"
       cancel-text="Cancelar"
-      variant="danger"
-      @close="closeDeleteDialog"
+      type="danger"
+      :is-loading="isDeleting"
       @confirm="confirmDelete"
+      @cancel="closeDeleteDialog"
     />
   </div>
 </template>
 
 <style scoped>
-.users-page {
+.categories-page {
   animation: fadeIn 0.4s ease-out;
 }
 
@@ -366,7 +350,7 @@ onMounted(() => {
 
 .data-table th,
 .data-table td {
-  padding: 1rem 1.25rem;
+  padding: 1rem;
   text-align: left;
   border-bottom: 1px solid var(--color-border);
 }
@@ -381,76 +365,28 @@ onMounted(() => {
 }
 
 .data-table tbody tr:hover {
-  background: rgba(107, 76, 154, 0.03);
+  background: rgba(107, 76, 154, 0.02);
 }
 
-.data-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-/* User Cell */
-.user-cell {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-  color: white;
-  border-radius: var(--radius-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 1rem;
-  flex-shrink: 0;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.user-name {
+/* Category Name */
+.category-name {
   font-weight: 600;
   color: var(--color-text-primary);
-  font-size: 0.95rem;
-  margin-bottom: 0.15rem;
 }
 
-.user-email {
-  font-weight: 500;
-  color: var(--color-text-primary);
-  font-size: 0.9rem;
-}
-
-.user-id {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  font-family: monospace;
-}
-
-/* Role Badge */
-.role-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: var(--radius-full);
-  font-size: 0.8rem;
-  font-weight: 500;
-  background: var(--color-background);
+/* Description */
+.description-text {
   color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  max-width: 250px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.role-badge.super-admin {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  color: white;
-}
-
-/* Status Badge */
-.status-badge {
+/* Toggle Badge */
+.toggle-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
   border-radius: var(--radius-full);
@@ -458,20 +394,24 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.status-badge.active {
+.toggle-badge.active {
   background: rgba(45, 143, 92, 0.1);
   color: var(--color-secondary);
 }
 
-.status-badge.inactive {
-  background: rgba(229, 62, 62, 0.1);
-  color: var(--color-error);
+.toggle-badge.inactive {
+  background: rgba(107, 114, 128, 0.1);
+  color: var(--color-text-muted);
 }
 
-/* Date */
-.date-text {
-  color: var(--color-text-secondary);
-  font-size: 0.9rem;
+/* Startup Name */
+.startup-name {
+  font-weight: 500;
+  color: var(--color-primary);
+}
+
+.text-muted {
+  color: var(--color-text-muted);
 }
 
 /* Actions Column */
@@ -482,8 +422,6 @@ onMounted(() => {
 
 .actions-cell {
   text-align: center !important;
-  padding: 1rem 1.25rem !important;
-  vertical-align: middle;
 }
 
 .actions-wrapper {
@@ -505,12 +443,14 @@ onMounted(() => {
   transition: all var(--transition-fast);
   padding: 0;
   flex-shrink: 0;
+  background: transparent;
 }
 
 .action-btn svg {
   display: block;
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
 }
 
 .action-btn.edit {
@@ -535,45 +475,27 @@ onMounted(() => {
 
 .no-actions {
   color: var(--color-text-muted);
-  display: inline-block;
 }
 
-/* Empty Row */
+/* Empty State */
 .empty-row {
-  text-align: center !important;
-  padding: var(--spacing-2xl) !important;
-}
-
-.empty-row .empty-icon {
-  font-size: 3rem;
-  display: block;
-  margin-bottom: var(--spacing-md);
-}
-
-.empty-row p {
-  color: var(--color-text-muted);
-}
-
-/* Permissions Debug */
-.permissions-debug {
-  padding: var(--spacing-md);
-  background: var(--color-background);
-  border-top: 1px solid var(--color-border);
   text-align: center;
 }
 
-.permissions-debug small {
-  color: var(--color-text-muted);
+.empty-state-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-xl);
+  gap: var(--spacing-sm);
 }
 
-.permissions-debug .has {
-  color: var(--color-secondary);
-  font-weight: 600;
+.empty-state-inline span {
+  font-size: 2rem;
 }
 
-.permissions-debug .no {
+.empty-state-inline p {
   color: var(--color-text-muted);
-  text-decoration: line-through;
 }
 
 /* Animations */
@@ -595,15 +517,13 @@ onMounted(() => {
 
   .data-table th,
   .data-table td {
-    padding: 0.75rem;
+    padding: 0.75rem 0.5rem;
+    font-size: 0.85rem;
   }
 
-  .user-info {
-    display: none;
-  }
-
-  .user-cell {
-    gap: 0;
+  .description-text {
+    max-width: 150px;
   }
 }
 </style>
+

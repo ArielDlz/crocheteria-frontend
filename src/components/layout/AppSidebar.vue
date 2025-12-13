@@ -46,7 +46,8 @@ const menuConfig = [
     children: [
       { label: 'Productos', route: '/inventarios/productos' },
       { label: 'Categorías', route: '/inventarios/categorias' },
-      { label: 'Stock', route: '/inventarios/stock' }
+      { label: 'Compras', route: '/inventarios/compras' },
+      { label: 'Surtir emprendimientos', route: '/inventarios/surtir' }
     ]
   },
   {

@@ -42,7 +42,7 @@ export const rolesService = {
    * @returns {Promise<Object>} Rol actualizado
    */
   async updateRole(id, roleData) {
-    const response = await api.put(`/roles/${id}`, roleData)
+    const response = await api.patch(`/roles/${id}`, roleData)
     return response
   },
 

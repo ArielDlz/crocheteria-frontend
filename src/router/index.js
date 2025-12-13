@@ -54,6 +54,30 @@ const routes = [
         component: () => import('@/modules/inventarios/views/InventariosView.vue'),
         meta: { title: 'Inventarios' }
       },
+      {
+        path: 'inventarios/categorias',
+        name: 'Categorias',
+        component: () => import('@/modules/inventarios/views/CategoriesView.vue'),
+        meta: { title: 'Categorías de Productos' }
+      },
+      {
+        path: 'inventarios/productos',
+        name: 'Productos',
+        component: () => import('@/modules/inventarios/views/ProductsView.vue'),
+        meta: { title: 'Productos' }
+      },
+      {
+        path: 'inventarios/compras',
+        name: 'Compras',
+        component: () => import('@/modules/inventarios/views/PurchasesView.vue'),
+        meta: { title: 'Compras' }
+      },
+      {
+        path: 'inventarios/surtir',
+        name: 'SurtirEmprendimientos',
+        component: () => import('@/modules/inventarios/views/StartupSupplyView.vue'),
+        meta: { title: 'Surtir Emprendimientos' }
+      },
 
       // === USUARIOS ===
       {
@@ -73,6 +97,12 @@ const routes = [
         name: 'Roles',
         component: () => import('@/modules/roles/views/RolesView.vue'),
         meta: { title: 'Roles' }
+      },
+      {
+        path: 'usuarios/permisos',
+        name: 'Permisos',
+        component: () => import('@/modules/permisos/views/PermisosView.vue'),
+        meta: { title: 'Permisos' }
       },
     ]
   },

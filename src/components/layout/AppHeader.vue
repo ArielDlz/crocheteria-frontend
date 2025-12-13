@@ -43,7 +43,7 @@ const closeUserMenu = () => {
 
     <div class="header-right">
       <!-- Notificaciones (placeholder) -->
-      <button class="header-icon-btn">
+      <button class="header-icon-btn" title="Notificaciones">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
           <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
@@ -187,6 +187,14 @@ export default {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.header-icon-btn svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
 }
 
 .header-icon-btn:hover {
@@ -196,10 +204,11 @@ export default {
 
 .notification-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
   min-width: 18px;
   height: 18px;
+  padding: 0 4px;
   background: var(--color-accent);
   color: white;
   font-size: 0.7rem;
@@ -208,6 +217,8 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 2px solid var(--color-white);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* User Menu */
