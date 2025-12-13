@@ -29,8 +29,8 @@ const props = defineProps({
   },
   type: {
     type: String,
-    default: 'danger', // alias de variant para compatibilidad
-    validator: (value) => ['danger', 'warning', 'info'].includes(value)
+    default: null, // Alias de variant para compatibilidad (deprecated)
+    validator: (value) => !value || ['danger', 'warning', 'info'].includes(value)
   },
   isLoading: {
     type: Boolean,
@@ -38,8 +38,9 @@ const props = defineProps({
   }
 })
 
-// Usar type como fallback de variant
-const effectiveVariant = props.variant !== 'danger' ? props.variant : props.type
+// type es un alias deprecated de variant para compatibilidad hacia atrás
+// Si se pasa type, se usa type; de lo contrario, se usa variant
+const effectiveVariant = props.type || props.variant
 
 const emit = defineEmits(['close', 'confirm', 'cancel'])
 

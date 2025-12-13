@@ -244,7 +244,7 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr v-if="filteredProducts.length === 0">
-              <td colspan="4" class="empty-row">
+              <td colspan="5" class="empty-row">
                 <div class="empty-state-inline">
                   <span>📭</span>
                   <p v-if="searchQuery || selectedCategory">No se encontraron productos con los filtros aplicados</p>

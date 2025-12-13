@@ -143,7 +143,7 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr v-if="categories.length === 0">
-              <td colspan="6" class="empty-row">
+              <td colspan="7" class="empty-row">
                 <div class="empty-state-inline">
                   <span>📭</span>
                   <p>No hay categorías registradas</p>
