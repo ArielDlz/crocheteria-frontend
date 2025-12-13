@@ -165,15 +165,15 @@ onMounted(() => {
               <td>
                 <span 
                   class="toggle-badge"
-                  :class="category.comission ? 'active' : 'inactive'"
+                  :class="category.comision ? 'active' : 'inactive'"
                 >
-                  {{ category.comission ? 'Sí' : 'No' }}
+                  {{ category.comision ? 'Sí' : 'No' }}
                 </span>
               </td>
 
               <!-- Monto de la comisión -->
               <td>
-                <template v-if="category.comission && category.comision_ammount">
+                <template v-if="category.comision && category.comision_ammount">
                   <span class="amount-text">{{ category.comision_ammount }}</span>
                   <span class="currency-text">{{ category.comision_type === 'Porcentaje' ? ' %' : ' MXN' }}</span>
                 </template>

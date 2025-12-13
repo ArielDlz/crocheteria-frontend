@@ -24,7 +24,7 @@ const isEditMode = computed(() => !!props.categoryId)
 const form = ref({
   name: '',
   description: '',
-  comission: false,
+  comision: false,
   comision_type: '',
   comision_ammount: '',
   startup: false,
@@ -41,18 +41,18 @@ const isSubmitting = ref(false)
 const errors = ref({})
 
 // Opciones de tipo de comisión (cargadas desde el backend)
-const comissionOptions = ref([])
+const comisionOptions = ref([])
 
 // Cargar opciones de comisión desde el backend
-const loadComissionOptions = async () => {
-  if (comissionOptions.value.length > 0) return // Ya están cargadas
+const loadComisionOptions = async () => {
+  if (comisionOptions.value.length > 0) return // Ya están cargadas
   
   isLoadingOptions.value = true
   
   try {
-    const response = await api.get('/templates/comission_options')
+    const response = await api.get('/templates/comision_options')
     if (response && response.data && response.data.options) {
-      comissionOptions.value = response.data.options
+      comisionOptions.value = response.data.options
     }
   } catch (error) {
     console.error('Error al cargar opciones de comisión:', error)
@@ -63,8 +63,8 @@ const loadComissionOptions = async () => {
 }
 
 // Obtener el label del tipo de comisión seleccionado
-const selectedComissionLabel = computed(() => {
-  const selected = comissionOptions.value.find(opt => opt.value === form.value.comision_type)
+const selectedComisionLabel = computed(() => {
+  const selected = comisionOptions.value.find(opt => opt.value === form.value.comision_type)
   return selected ? selected.label : ''
 })
 
@@ -81,7 +81,7 @@ const loadCategoryData = async () => {
     form.value = {
       name: category.name || '',
       description: category.description || '',
-      comission: category.comission || false,
+      comision: category.comision || false,
       comision_type: category.comision_type || '',
       comision_ammount: category.comision_ammount || '',
       startup: category.startup || false,
@@ -92,7 +92,7 @@ const loadCategoryData = async () => {
     originalValues.value = {
       name: form.value.name,
       description: form.value.description,
-      comission: form.value.comission,
+      comision: form.value.comision,
       comision_type: form.value.comision_type,
       comision_ammount: form.value.comision_ammount,
       startup: form.value.startup,
@@ -123,8 +123,8 @@ const validate = () => {
     isValid = false
   }
 
-  // Campos de comisión (requeridos si comission está activo)
-  if (form.value.comission) {
+  // Campos de comisión (requeridos si comision está activo)
+  if (form.value.comision) {
     if (!form.value.comision_type) {
       errors.value.comision_type = 'Selecciona un tipo de comisión'
       isValid = false
@@ -156,16 +156,16 @@ const getChangedFields = () => {
     changed.description = form.value.description.trim()
   }
 
-  if (form.value.comission !== originalValues.value.comission) {
-    changed.comission = form.value.comission
+  if (form.value.comision !== originalValues.value.comision) {
+    changed.comision = form.value.comision
   }
 
   if (form.value.comision_type !== originalValues.value.comision_type) {
-    changed.comision_type = form.value.comission ? form.value.comision_type : ''
+    changed.comision_type = form.value.comision ? form.value.comision_type : ''
   }
 
   if (form.value.comision_ammount !== originalValues.value.comision_ammount) {
-    changed.comision_ammount = form.value.comission ? Number(form.value.comision_ammount) : 0
+    changed.comision_ammount = form.value.comision ? Number(form.value.comision_ammount) : 0
   }
 
   if (form.value.startup !== originalValues.value.startup) {
@@ -204,9 +204,9 @@ const handleSubmit = async () => {
       const categoryData = {
         name: form.value.name.trim(),
         description: form.value.description.trim(),
-        comission: form.value.comission,
-        comision_type: form.value.comission ? form.value.comision_type : '',
-        comision_ammount: form.value.comission ? Number(form.value.comision_ammount) : 0,
+        comision: form.value.comision,
+        comision_type: form.value.comision ? form.value.comision_type : '',
+        comision_ammount: form.value.comision ? Number(form.value.comision_ammount) : 0,
         startup: form.value.startup,
         startup_name: form.value.startup ? form.value.startup_name.trim() : ''
       }
@@ -229,7 +229,7 @@ const handleClose = () => {
   form.value = {
     name: '',
     description: '',
-    comission: false,
+    comision: false,
     comision_type: '',
     comision_ammount: '',
     startup: false,
@@ -244,7 +244,7 @@ const handleClose = () => {
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
     // Cargar opciones de comisión
-    loadComissionOptions()
+    loadComisionOptions()
     
     if (isEditMode.value) {
       loadCategoryData()
@@ -253,7 +253,7 @@ watch(() => props.isOpen, (newVal) => {
       form.value = {
         name: '',
         description: '',
-        comission: false,
+        comision: false,
         comision_type: '',
         comision_ammount: '',
         startup: false,
@@ -264,8 +264,8 @@ watch(() => props.isOpen, (newVal) => {
   }
 })
 
-// Limpiar campos de comisión cuando comission se desactiva
-watch(() => form.value.comission, (newVal) => {
+// Limpiar campos de comisión cuando comision se desactiva
+watch(() => form.value.comision, (newVal) => {
   if (!newVal) {
     form.value.comision_type = ''
     form.value.comision_ammount = ''
@@ -288,22 +288,24 @@ watch(() => form.value.startup, (newVal) => {
 
 // Computed para verificar si el formulario es válido
 const isFormValid = computed(() => {
+  // Validación base: nombre y descripción requeridos
   const baseValid = form.value.name.trim() !== '' && 
                     form.value.description.trim() !== ''
   
+  if (!baseValid) return false
+  
   // Validar campos de comisión si está activo
-  if (form.value.comission) {
-    if (!form.value.comision_type || !form.value.comision_ammount || form.value.comision_ammount <= 0) {
-      return false
-    }
-  }
+  const comisionValid = !form.value.comision || (
+    form.value.comision_type && 
+    form.value.comision_ammount && 
+    Number(form.value.comision_ammount) > 0
+  )
   
-  // Validar startup
-  if (form.value.startup) {
-    return baseValid && form.value.startup_name.trim() !== ''
-  }
+  // Validar startup si está activo
+  const startupValid = !form.value.startup || 
+                       form.value.startup_name.trim() !== ''
   
-  return baseValid
+  return comisionValid && startupValid
 })
 
 // Título del modal
@@ -383,7 +385,7 @@ const modalTitle = computed(() => {
           <span class="toggle-wrapper">
             <input
               type="checkbox"
-              v-model="form.comission"
+              v-model="form.comision"
               class="toggle-input"
               :disabled="isLoading"
             />
@@ -398,7 +400,7 @@ const modalTitle = computed(() => {
 
       <!-- Campos de Comisión (condicionales) -->
       <transition name="slide-fade">
-        <div v-if="form.comission" class="comission-fields">
+        <div v-if="form.comision" class="comision-fields">
           <!-- Tipo de Comisión (Radio buttons) -->
           <div class="form-group">
             <label>
@@ -412,7 +414,7 @@ const modalTitle = computed(() => {
             
             <div v-else class="radio-group">
               <label 
-                v-for="option in comissionOptions" 
+                v-for="option in comisionOptions" 
                 :key="option.value"
                 class="radio-label"
                 :class="{ 'selected': form.comision_type === option.value }"
@@ -447,7 +449,7 @@ const modalTitle = computed(() => {
                 :class="{ 'error': errors.comision_ammount }"
                 :disabled="isLoading"
               />
-              <span class="input-suffix">{{ selectedComissionLabel }}</span>
+              <span class="input-suffix">{{ selectedComisionLabel }}</span>
             </div>
             <span v-if="errors.comision_ammount" class="field-error">{{ errors.comision_ammount }}</span>
           </div>
@@ -687,8 +689,8 @@ const modalTitle = computed(() => {
   line-height: 1.4;
 }
 
-/* Comission Fields */
-.comission-fields {
+/* Comision Fields */
+.comision-fields {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
