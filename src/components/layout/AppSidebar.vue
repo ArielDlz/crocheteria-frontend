@@ -33,7 +33,8 @@ const menuConfig = [
     children: [
       { label: 'Nueva Venta', route: '/ventas/nueva', permission: 'sales:create' },
       { label: 'Historial', route: '/ventas/historial', permission: 'sales:read' },
-      { label: 'Reportes', route: '/ventas/reportes', permission: 'sales:read' }
+      { label: 'Reportes', route: '/ventas/reportes', permission: 'sales:read' },
+      { label: 'Control de caja', route: '/ventas/control-caja', permission: 'sales:read' }
     ]
   },
   {

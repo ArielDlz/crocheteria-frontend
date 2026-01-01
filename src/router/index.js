@@ -52,6 +52,12 @@ const routes = [
         component: () => import('@/modules/ventas/views/VentasView.vue'),
         meta: { title: 'Nueva Venta' }
       },
+      {
+        path: 'ventas/control-caja',
+        name: 'ControlCaja',
+        component: () => import('@/modules/ventas/views/ControlCajaView.vue'),
+        meta: { title: 'Control de Caja' }
+      },
 
       // === INVENTARIOS ===
       {

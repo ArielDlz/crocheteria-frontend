@@ -3,9 +3,11 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { productsService } from '@/modules/inventarios/services/productsService'
 import { categoriesService } from '@/modules/inventarios/services/categoriesService'
 import { salesService } from '@/modules/ventas/services/salesService'
+import { cashRegisterService } from '@/modules/ventas/services/cashRegisterService'
 import { useAuth } from '@/modules/auth/composables/useAuth'
 import api from '@/services/api'
 import Modal from '@/components/common/Modal.vue'
+import OpenCashRegisterModal from '@/modules/ventas/components/OpenCashRegisterModal.vue'
 
 // Estado
 const products = ref([])
@@ -22,6 +24,11 @@ const selectedCategoryId = ref(null)
 
 // Autenticación
 const { user } = useAuth()
+
+// Control de caja
+const isCashRegisterOpen = ref(false)
+const isCheckingCashRegister = ref(false)
+const isOpenCashRegisterModalOpen = ref(false)
 
 // Modal de pago
 const isPaymentModalOpen = ref(false)
@@ -55,6 +62,51 @@ const loadCategories = async () => {
   } catch (err) {
     console.error('Error al cargar categorías:', err)
   }
+}
+
+// Validar estado de la caja
+const checkCashRegisterStatus = async () => {
+  isCheckingCashRegister.value = true
+  try {
+    const status = await cashRegisterService.getStatus()
+    isCashRegisterOpen.value = status.isOpen === true
+    
+    // Si la caja no está abierta, mostrar el modal
+    if (!isCashRegisterOpen.value) {
+      isOpenCashRegisterModalOpen.value = true
+    }
+  } catch (err) {
+    console.error('Error al validar estado de caja:', err)
+    // Si hay error, asumimos que la caja no está abierta
+    isCashRegisterOpen.value = false
+    isOpenCashRegisterModalOpen.value = true
+  } finally {
+    isCheckingCashRegister.value = false
+  }
+}
+
+// Manejar cierre del modal de apertura de caja
+const handleOpenCashRegisterModalClose = async () => {
+  isOpenCashRegisterModalOpen.value = false
+  // Validar nuevamente el estado después de cerrar el modal (sin forzar mostrar el modal)
+  isCheckingCashRegister.value = true
+  try {
+    const status = await cashRegisterService.getStatus()
+    isCashRegisterOpen.value = status.isOpen === true
+    // No forzamos mostrar el modal aquí, solo actualizamos el estado
+  } catch (err) {
+    console.error('Error al validar estado de caja:', err)
+    isCashRegisterOpen.value = false
+  } finally {
+    isCheckingCashRegister.value = false
+  }
+}
+
+// Manejar éxito al abrir la caja
+const handleOpenCashRegisterSuccess = async () => {
+  isOpenCashRegisterModalOpen.value = false
+  // Validar nuevamente el estado después de abrir la caja
+  await checkCashRegisterStatus()
 }
 
 // Productos filtrados
@@ -214,6 +266,14 @@ const loadPaymentMethods = async () => {
 // Abrir modal de pago
 const openPaymentModal = async () => {
   if (orderItems.value.length === 0) return
+  
+  // Validar que la caja esté abierta antes de permitir el pago
+  if (!isCashRegisterOpen.value) {
+    error.value = 'La caja debe estar abierta para realizar ventas. Por favor, abre la caja primero.'
+    // Mostrar el modal de apertura de caja
+    isOpenCashRegisterModalOpen.value = true
+    return
+  }
   
   paymentMethodsList.value = []
   currentPaymentMethod.value = null
@@ -375,6 +435,14 @@ const validatePaymentsTotal = () => {
 const processPayment = async () => {
   if (!canConfirmPayment.value) return
   
+  // Validar que la caja esté abierta
+  if (!isCashRegisterOpen.value) {
+    error.value = 'La caja debe estar abierta para realizar ventas. Por favor, abre la caja primero.'
+    // Mostrar el modal de apertura de caja
+    isOpenCashRegisterModalOpen.value = true
+    return
+  }
+  
   // Validación adicional: asegurar que la suma de pagos no exceda el total
   if (!validatePaymentsTotal()) {
     error.value = 'La suma de los pagos no puede exceder el total de la orden'
@@ -466,6 +534,10 @@ const processPayment = async () => {
 
 // Cargar datos al montar
 onMounted(async () => {
+  // Primero validar el estado de la caja
+  await checkCashRegisterStatus()
+  
+  // Luego cargar productos y categorías
   await Promise.all([
     loadProducts(),
     loadCategories()
@@ -897,6 +969,14 @@ onMounted(async () => {
         </button>
       </template>
     </Modal>
+
+    <!-- Modal de Apertura de Caja -->
+    <OpenCashRegisterModal
+      :is-open="isOpenCashRegisterModalOpen"
+      :user-id="user?._id || user?.id || ''"
+      @close="handleOpenCashRegisterModalClose"
+      @success="handleOpenCashRegisterSuccess"
+    />
   </div>
 </template>
 
