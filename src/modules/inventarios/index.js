@@ -6,4 +6,5 @@ export { default as CategoriesView } from './views/CategoriesView.vue'
 
 // Servicios
 export { categoriesService } from './services/categoriesService'
+export { productsService } from './services/productsService'
 
