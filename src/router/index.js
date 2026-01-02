@@ -58,6 +58,12 @@ const routes = [
         component: () => import('@/modules/ventas/views/ControlCajaView.vue'),
         meta: { title: 'Control de Caja' }
       },
+      {
+        path: 'ventas/control-caja/:id',
+        name: 'CashRegisterDetails',
+        component: () => import('@/modules/ventas/views/CashRegisterDetailsView.vue'),
+        meta: { title: 'Detalles de Caja' }
+      },
 
       // === INVENTARIOS ===
       {
@@ -115,6 +121,20 @@ const routes = [
         name: 'Permisos',
         component: () => import('@/modules/permisos/views/PermisosView.vue'),
         meta: { title: 'Permisos' }
+      },
+
+      // === CONTABILIDAD ===
+      {
+        path: 'contabilidad',
+        name: 'Contabilidad',
+        component: () => import('@/modules/contabilidad/views/ContabilidadView.vue'),
+        meta: { title: 'Contabilidad' }
+      },
+      {
+        path: 'contabilidad/saldos',
+        name: 'Saldos',
+        component: () => import('@/modules/contabilidad/views/SaldosView.vue'),
+        meta: { title: 'Saldos' }
       },
     ]
   },

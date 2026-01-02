@@ -1,12 +1,14 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { cashRegisterService } from '../services/cashRegisterService'
+
+const router = useRouter()
 
 // Estado
 const cashRegisters = ref([])
 const isLoading = ref(true)
 const error = ref(null)
-const selectedCashRegister = ref(null)
 
 // Cargar cajas
 const loadCashRegisters = async () => {
@@ -77,9 +79,7 @@ const getStatusClass = (status) => {
 
 // Ver detalles de la caja
 const viewDetails = (cashRegister) => {
-  selectedCashRegister.value = cashRegister
-  // Por ahora solo lo mostramos en consola, luego se puede hacer un modal
-  console.log('Detalles de la caja:', cashRegister)
+  router.push(`/ventas/control-caja/${cashRegister._id}`)
 }
 
 // Cargar datos al montar

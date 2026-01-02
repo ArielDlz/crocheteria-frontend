@@ -25,6 +25,16 @@ export const cashRegisterService = {
   },
 
   /**
+   * Obtener detalles de una caja registradora por ID
+   * @param {string} id - ID de la caja
+   * @returns {Promise<Object>} Detalles de la caja con pagos
+   */
+  async getCashRegisterById(id) {
+    const response = await api.get(`/cash-register/${id}`)
+    return response
+  },
+
+  /**
    * Abrir la caja registradora
    * @param {Object} data - Datos para abrir la caja
    * @param {number} data.initial_balance - Balance inicial
