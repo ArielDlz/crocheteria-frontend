@@ -10,7 +10,7 @@ import { authService } from '../services/authService'
 const permissions = ref([])
 const userRole = ref(null)
 
-// Inicializar desde localStorage
+// Inicializar desde sessionStorage (usuario y permisos se almacenan ahí para uso en frontend)
 const initializePermissions = () => {
   permissions.value = authService.getPermissions()
   const user = authService.getCurrentUser()

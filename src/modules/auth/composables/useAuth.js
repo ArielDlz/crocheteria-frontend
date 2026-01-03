@@ -1,6 +1,9 @@
 /**
  * Composable de Autenticación
  * Maneja el estado reactivo de la sesión del usuario
+ * 
+ * Nota: Con httpOnly cookies, el token se maneja automáticamente por el navegador
+ * Verificamos la autenticación con el backend en lugar de leer del storage
  */
 
 import { ref, computed, readonly } from 'vue'
@@ -9,16 +12,32 @@ import { usePermissions } from './usePermissions'
 
 // Estado global reactivo (fuera del composable para compartir entre componentes)
 const user = ref(null)
-const token = ref(null)
 const permissions = ref([])
 const isLoading = ref(true)
+const isAuthenticatedState = ref(false)
 
-// Inicializar estado desde localStorage
-const initializeAuth = () => {
-  token.value = authService.getToken()
-  user.value = authService.getCurrentUser()
-  permissions.value = authService.getPermissions()
-  isLoading.value = false
+// Inicializar estado verificando con el backend
+const initializeAuth = async () => {
+  try {
+    // Verificar sesión con el backend
+    const response = await authService.verifyToken()
+    
+    // Si hay respuesta, el usuario está autenticado
+    if (response) {
+      isAuthenticatedState.value = true
+      user.value = authService.getCurrentUser()
+      permissions.value = authService.getPermissions()
+    } else {
+      isAuthenticatedState.value = false
+    }
+  } catch (error) {
+    // Si falla la verificación, el usuario no está autenticado
+    isAuthenticatedState.value = false
+    user.value = null
+    permissions.value = []
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // Ejecutar al cargar el módulo
@@ -28,7 +47,7 @@ export function useAuth() {
   const { refreshPermissions, clearPermissions } = usePermissions()
 
   // Computed para verificar si está autenticado
-  const isAuthenticated = computed(() => !!token.value)
+  const isAuthenticated = computed(() => isAuthenticatedState.value)
 
   // Computed para verificar si es super admin
   const isSuperAdmin = computed(() => user.value?.role?.isSuperAdmin === true)
@@ -43,7 +62,8 @@ export function useAuth() {
     const response = await authService.login(email, password)
     
     // Actualizar estado reactivo
-    token.value = response.access_token || response.token || authService.getToken()
+    // El token se maneja automáticamente por la cookie httpOnly
+    isAuthenticatedState.value = true
     user.value = response.user || authService.getCurrentUser()
     permissions.value = response.permissions || authService.getPermissions()
     
@@ -56,11 +76,11 @@ export function useAuth() {
   /**
    * Cerrar sesión
    */
-  const logout = () => {
-    authService.logout()
+  const logout = async () => {
+    await authService.logout()
     
     // Limpiar estado reactivo
-    token.value = null
+    isAuthenticatedState.value = false
     user.value = null
     permissions.value = []
     
@@ -72,19 +92,32 @@ export function useAuth() {
    * Verificar y refrescar sesión (útil al cargar la app)
    */
   const checkAuth = async () => {
-    if (!token.value) {
-      isLoading.value = false
-      return false
-    }
-
+    isLoading.value = true
+    
     try {
-      // Opcional: verificar token con el backend
-      // await authService.verifyToken()
-      isLoading.value = false
-      return true
+      // Verificar sesión con el backend
+      const response = await authService.verifyToken()
+      
+      if (response) {
+        isAuthenticatedState.value = true
+        user.value = authService.getCurrentUser()
+        permissions.value = authService.getPermissions()
+        refreshPermissions()
+        isLoading.value = false
+        return true
+      } else {
+        isAuthenticatedState.value = false
+        user.value = null
+        permissions.value = []
+        isLoading.value = false
+        return false
+      }
     } catch (error) {
-      // Token inválido, limpiar sesión
-      logout()
+      // Sesión inválida, limpiar estado
+      isAuthenticatedState.value = false
+      user.value = null
+      permissions.value = []
+      clearPermissions()
       isLoading.value = false
       return false
     }
@@ -93,7 +126,6 @@ export function useAuth() {
   return {
     // Estado (readonly para evitar modificaciones directas)
     user: readonly(user),
-    token: readonly(token),
     permissions: readonly(permissions),
     isLoading: readonly(isLoading),
     isAuthenticated,

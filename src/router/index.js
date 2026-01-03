@@ -6,11 +6,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '@/modules/auth'
 
-// Layouts
-import MainLayout from '@/layouts/MainLayout.vue'
+// Layouts - Lazy loading
+const MainLayout = () => import('@/layouts/MainLayout.vue')
 
-// Auth Views
-import { LoginView } from '@/modules/auth'
+// Auth Views - Lazy loading
+const LoginView = () => import('@/modules/auth/views/LoginView.vue')
 
 // Rutas de la aplicación
 const routes = [
@@ -153,18 +153,56 @@ const router = createRouter({
 })
 
 // Guard de navegación - Proteger rutas
-router.beforeEach((to, from, next) => {
-  const { isAuthenticated } = useAuth()
+router.beforeEach(async (to, from, next) => {
+  const { isAuthenticated, checkAuth, isLoading } = useAuth()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
 
-  if (requiresAuth && !isAuthenticated.value) {
-    // Redirigir al login si no está autenticado
-    next({ name: 'Login' })
-  } else if (to.name === 'Login' && isAuthenticated.value) {
-    // Si ya está logueado y trata de ir al login, redirigir al dashboard
-    next({ name: 'Dashboard' })
-  } else {
-    next()
+  // Si aún está cargando la autenticación, esperar
+  if (isLoading.value) {
+    await checkAuth()
+  }
+
+  // Si la ruta requiere autenticación
+  if (requiresAuth) {
+    if (!isAuthenticated.value) {
+      // Redirigir al login si no está autenticado
+      next({ 
+        name: 'Login',
+        query: { redirect: to.fullPath } // Guardar la ruta destino para redirigir después del login
+      })
+      return
+    }
+
+    // Verificar token válido (opcional pero recomendado)
+    try {
+      const isValid = await checkAuth()
+      if (!isValid) {
+        next({ name: 'Login', query: { redirect: to.fullPath } })
+        return
+      }
+    } catch (error) {
+      // Si hay error al verificar, redirigir al login
+      next({ name: 'Login', query: { redirect: to.fullPath } })
+      return
+    }
+  }
+
+  // Si ya está logueado y trata de ir al login, redirigir al dashboard
+  if (to.name === 'Login' && isAuthenticated.value) {
+    const redirect = to.query.redirect || '/dashboard'
+    next(typeof redirect === 'string' ? redirect : '/dashboard')
+    return
+  }
+
+  next()
+})
+
+// Manejar errores de navegación
+router.onError((error) => {
+  console.error('Error de navegación:', error)
+  // Si es un error 404 o de carga de módulo, redirigir al dashboard
+  if (error.message && error.message.includes('Failed to fetch dynamically imported module')) {
+    window.location.href = '/dashboard'
   }
 })
 
