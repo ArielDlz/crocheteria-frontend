@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
 // Router para redirección
 const router = useRouter()
+const route = useRoute()
 
 // Composable de autenticación (estado reactivo compartido)
 const { login, isAuthenticated } = useAuth()
@@ -29,8 +30,9 @@ const handleSubmit = async () => {
     await login(email.value, password.value)
     console.log('Login exitoso! Usuario autenticado:', isAuthenticated.value)
     
-    // Redirigir al dashboard después del login exitoso
-    router.push('/dashboard')
+    // Redirigir a la ruta destino si existe (query redirect), sino al dashboard
+    const redirectPath = route.query.redirect || '/dashboard'
+    router.push(typeof redirectPath === 'string' ? redirectPath : '/dashboard')
     
   } catch (error) {
     console.error('Error al iniciar sesión:', error)

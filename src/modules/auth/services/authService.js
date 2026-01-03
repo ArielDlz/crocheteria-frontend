@@ -1,37 +1,42 @@
 /**
  * Servicio de Autenticación
  * Maneja login, logout, tokens y permisos
+ * 
+ * Nota: Con httpOnly cookies, el token se maneja automáticamente por el navegador
+ * Solo almacenamos usuario y permisos en sessionStorage para uso en el frontend
  */
 
 import api from '@/services/api'
 
-const AUTH_TOKEN_KEY = 'auth_token'
 const USER_KEY = 'auth_user'
 const PERMISSIONS_KEY = 'auth_permissions'
+
+// Usar sessionStorage solo para datos del usuario (no para el token)
+const storage = sessionStorage
 
 export const authService = {
   /**
    * Iniciar sesión
    * @param {string} email - Correo electrónico
    * @param {string} password - Contraseña
+   * 
+   * Nota: El token se guarda automáticamente como httpOnly cookie por el backend
+   * Solo almacenamos usuario y permisos en sessionStorage para uso en el frontend
    */
   async login(email, password) {
     const response = await api.post('/auth/login', { email, password })
     
-    // Guardar token (soporta tanto "token" como "access_token")
-    const token = response.access_token || response.token
-    if (token) {
-      localStorage.setItem(AUTH_TOKEN_KEY, token)
-    }
+    // El token se guarda automáticamente como httpOnly cookie por el backend
+    // No necesitamos almacenarlo manualmente
     
-    // Guardar usuario (incluye rol)
+    // Guardar usuario (incluye rol) en sessionStorage para uso en el frontend
     if (response.user) {
-      localStorage.setItem(USER_KEY, JSON.stringify(response.user))
+      storage.setItem(USER_KEY, JSON.stringify(response.user))
     }
     
-    // Guardar permisos
+    // Guardar permisos en sessionStorage para uso en el frontend
     if (response.permissions) {
-      localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(response.permissions))
+      storage.setItem(PERMISSIONS_KEY, JSON.stringify(response.permissions))
     }
     
     return response
@@ -39,32 +44,41 @@ export const authService = {
 
   /**
    * Cerrar sesión
+   * Llama al endpoint del backend para limpiar la cookie httpOnly
    */
-  logout() {
-    localStorage.removeItem(AUTH_TOKEN_KEY)
-    localStorage.removeItem(USER_KEY)
-    localStorage.removeItem(PERMISSIONS_KEY)
+  async logout() {
+    try {
+      // Llamar al endpoint de logout del backend para limpiar la cookie httpOnly
+      await api.post('/auth/logout')
+    } catch (error) {
+      // Si falla, continuar limpiando el frontend
+      console.error('Error al cerrar sesión en el backend:', error)
+    } finally {
+      // Limpiar datos del usuario en sessionStorage
+      storage.removeItem(USER_KEY)
+      storage.removeItem(PERMISSIONS_KEY)
+    }
   },
 
   /**
    * Verificar si el usuario está autenticado
+   * Con httpOnly cookies, verificamos con el backend
    */
-  isAuthenticated() {
-    return !!localStorage.getItem(AUTH_TOKEN_KEY)
-  },
-
-  /**
-   * Obtener el token actual
-   */
-  getToken() {
-    return localStorage.getItem(AUTH_TOKEN_KEY)
+  async isAuthenticated() {
+    try {
+      // Verificar con el backend si hay una sesión válida
+      await api.get('/auth/verify')
+      return true
+    } catch (error) {
+      return false
+    }
   },
 
   /**
    * Obtener el usuario actual
    */
   getCurrentUser() {
-    const user = localStorage.getItem(USER_KEY)
+    const user = storage.getItem(USER_KEY)
     return user ? JSON.parse(user) : null
   },
 
@@ -72,7 +86,7 @@ export const authService = {
    * Obtener los permisos del usuario
    */
   getPermissions() {
-    const permissions = localStorage.getItem(PERMISSIONS_KEY)
+    const permissions = storage.getItem(PERMISSIONS_KEY)
     return permissions ? JSON.parse(permissions) : []
   },
 
@@ -85,15 +99,26 @@ export const authService = {
   },
 
   /**
-   * Verificar token con el backend (opcional)
+   * Verificar sesión con el backend
+   * Retorna el usuario y permisos si la sesión es válida
    */
   async verifyToken() {
     try {
       const response = await api.get('/auth/verify')
+      
+      // Actualizar usuario y permisos si el backend los retorna
+      if (response.user) {
+        storage.setItem(USER_KEY, JSON.stringify(response.user))
+      }
+      if (response.permissions) {
+        storage.setItem(PERMISSIONS_KEY, JSON.stringify(response.permissions))
+      }
+      
       return response
     } catch (error) {
-      // Si el token es inválido, limpiar storage
-      this.logout()
+      // Si la sesión es inválida, limpiar storage
+      storage.removeItem(USER_KEY)
+      storage.removeItem(PERMISSIONS_KEY)
       throw error
     }
   },
