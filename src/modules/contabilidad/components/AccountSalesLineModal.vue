@@ -31,6 +31,9 @@ const form = ref({
   }
 })
 
+// Valor inicial de potential_profit para calcular ganancia (tanto para startup como no startup)
+const initialPotentialProfit = ref(0)
+
 // Estado
 const isSubmitting = ref(false)
 const errors = ref({})
@@ -38,27 +41,60 @@ const errors = ref({})
 // Inicializar formulario cuando se abre el modal o cambia la línea
 watch(() => [props.isOpen, props.salesLine], ([isOpen, line]) => {
   if (isOpen && line) {
-    // Valores por defecto desde la línea
-    form.value = {
-      profit: line.potential_profit || 0,
-      rent: line.rent_amount || 0,
-      investment: line.line_total_cost || 0,
-      startup: {
-        id: line.startup_id || null,
-        amount: line.startup_comission || 0
+    if (line.startup) {
+      // Cuando es startup: calcular Saldo de emprendimiento = line_total - startup_comission
+      const lineTotal = line.line_total || 0
+      const startupCommission = line.startup_comission || 0
+      const startupBalance = lineTotal - startupCommission
+      
+      initialPotentialProfit.value = line.potential_profit || 0
+      const rentAmount = line.rent_amount || 0
+      const calculatedProfit = Math.max(0, initialPotentialProfit.value - rentAmount)
+      
+      form.value = {
+        profit: calculatedProfit,
+        rent: rentAmount,
+        investment: 0, // Siempre 0 cuando es startup
+        startup: {
+          id: line.category_id || null, // Usar category_id como startup.id
+          amount: startupBalance // Saldo de emprendimiento
+        }
+      }
+    } else {
+      // Cuando NO es startup: comportamiento original
+      initialPotentialProfit.value = line.potential_profit || 0
+      const rentAmount = line.rent_amount || 0
+      const calculatedProfit = Math.max(0, initialPotentialProfit.value - rentAmount)
+      
+      form.value = {
+        profit: calculatedProfit,
+        rent: rentAmount,
+        investment: line.line_total_cost || 0,
+        startup: {
+          id: null,
+          amount: 0
+        }
       }
     }
     errors.value = {}
   }
 }, { immediate: true })
 
+// Watcher para ajustar ganancia cuando cambia renta (tanto para startup como no startup)
+watch(() => form.value.rent, (newRent) => {
+  const calculatedProfit = Math.max(0, initialPotentialProfit.value - (newRent || 0))
+  form.value.profit = calculatedProfit
+})
+
 // Calcular total ingresado
 const totalEntered = computed(() => {
-  let total = (form.value.profit || 0) + (form.value.rent || 0) + (form.value.investment || 0)
-  if (props.salesLine?.startup && form.value.startup.amount) {
-    total += (form.value.startup.amount || 0)
+  if (props.salesLine?.startup) {
+    // Cuando es startup: profit + rent + startup.amount (Saldo de emprendimiento)
+    return (form.value.profit || 0) + (form.value.rent || 0) + (form.value.startup.amount || 0)
+  } else {
+    // Cuando NO es startup: profit + rent + investment
+    return (form.value.profit || 0) + (form.value.rent || 0) + (form.value.investment || 0)
   }
-  return total
 })
 
 // Obtener total de ingreso esperado
@@ -88,8 +124,14 @@ const validate = () => {
     isValid = false
   }
 
-  // Investment
-  if (form.value.investment < 0) {
+  // Validar que la renta no exceda la ganancia potencial (tanto para startup como no startup)
+  if (form.value.rent > initialPotentialProfit.value) {
+    errors.value.rent = `La renta no puede exceder la ganancia potencial (${formatPrice(initialPotentialProfit.value)})`
+    isValid = false
+  }
+
+  // Investment (solo validar si NO es startup)
+  if (!props.salesLine?.startup && form.value.investment < 0) {
     errors.value.investment = 'La inversión no puede ser negativa'
     isValid = false
   }
@@ -101,7 +143,7 @@ const validate = () => {
       isValid = false
     }
     if (form.value.startup.amount < 0) {
-      errors.value.startupAmount = 'El monto del startup no puede ser negativo'
+      errors.value.startupAmount = 'El saldo de emprendimiento no puede ser negativo'
       isValid = false
     }
   }
@@ -128,14 +170,14 @@ const handleSubmit = async () => {
     const accountsData = {
       profit: form.value.profit,
       rent: form.value.rent,
-      investment: form.value.investment
+      investment: props.salesLine?.startup ? 0 : form.value.investment // Siempre 0 cuando es startup
     }
 
     // Solo incluir startup si la línea es startup
     if (props.salesLine?.startup && form.value.startup.id) {
       accountsData.startup = {
-        id: form.value.startup.id,
-        amount: form.value.startup.amount
+        id: form.value.startup.id, // category_id
+        amount: form.value.startup.amount // Saldo de emprendimiento
       }
     }
 
@@ -228,104 +270,89 @@ const referenceInfo = computed(() => {
         <h4 class="section-title">Valores a Contabilizar</h4>
         
         <div class="form-table">
-          <div class="form-row">
-            <div class="form-label-cell">
-              <label for="investment">Inversión <span class="required">*</span></label>
-              <span class="field-hint">Ref: {{ formatPrice(referenceInfo?.lineTotalCost || 0) }}</span>
-            </div>
-            <div class="form-input-cell">
-              <div class="input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input
-                  id="investment"
-                  v-model.number="form.investment"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  class="form-input"
-                  :class="{ 'error': errors.investment }"
-                  placeholder="0.00"
-                  :disabled="isSubmitting"
-                />
-              </div>
-              <span v-if="errors.investment" class="error-text">{{ errors.investment }}</span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-label-cell">
-              <label for="profit">Ganancia <span class="required">*</span></label>
-              <span class="field-hint">Ref: {{ formatPrice(referenceInfo?.potentialProfit || 0) }}</span>
-            </div>
-            <div class="form-input-cell">
-              <div class="input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input
-                  id="profit"
-                  v-model.number="form.profit"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  class="form-input"
-                  :class="{ 'error': errors.profit }"
-                  placeholder="0.00"
-                  :disabled="isSubmitting"
-                />
-              </div>
-              <span v-if="errors.profit" class="error-text">{{ errors.profit }}</span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-label-cell">
-              <label for="rent">Renta</label>
-              <span class="field-hint">Renta asociada</span>
-            </div>
-            <div class="form-input-cell">
-              <div class="input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input
-                  id="rent"
-                  v-model.number="form.rent"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  class="form-input"
-                  :class="{ 'error': errors.rent }"
-                  placeholder="0.00"
-                  :disabled="isSubmitting"
-                />
-              </div>
-              <span v-if="errors.rent" class="error-text">{{ errors.rent }}</span>
-            </div>
-          </div>
-
-          <!-- Campos de Startup (solo si es startup) -->
-          <template v-if="salesLine?.startup">
-            <div class="form-divider"></div>
-            
+          <!-- Cuando NO es startup: mostrar Inversión, Ganancia, Renta -->
+          <template v-if="!salesLine?.startup">
             <div class="form-row">
               <div class="form-label-cell">
-                <label for="startupId">ID del Startup <span class="required">*</span></label>
+                <label for="investment">Inversión <span class="required">*</span></label>
+                <span class="field-hint">Ref: {{ formatPrice(referenceInfo?.lineTotalCost || 0) }}</span>
               </div>
               <div class="form-input-cell">
-                <input
-                  id="startupId"
-                  v-model="form.startup.id"
-                  type="text"
-                  class="form-input"
-                  :class="{ 'error': errors.startupId }"
-                  placeholder="507f1f77bcf86cd799439011"
-                  :disabled="isSubmitting"
-                />
-                <span v-if="errors.startupId" class="error-text">{{ errors.startupId }}</span>
+                <div class="input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input
+                    id="investment"
+                    v-model.number="form.investment"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    class="form-input"
+                    :class="{ 'error': errors.investment }"
+                    placeholder="0.00"
+                    :disabled="true"
+                    readonly
+                  />
+                </div>
+                <span v-if="errors.investment" class="error-text">{{ errors.investment }}</span>
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-label-cell">
-                <label for="startupAmount">Monto del Startup <span class="required">*</span></label>
-                <span class="field-hint">Ref: {{ formatPrice(salesLine?.startup_comission || 0) }}</span>
+                <label for="profit">Ganancia <span class="required">*</span></label>
+                <span class="field-hint">Ref: {{ formatPrice(referenceInfo?.potentialProfit || 0) }} (se ajusta automáticamente según renta)</span>
+              </div>
+              <div class="form-input-cell">
+                <div class="input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input
+                    id="profit"
+                    v-model.number="form.profit"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    class="form-input"
+                    :class="{ 'error': errors.profit }"
+                    placeholder="0.00"
+                    :disabled="true"
+                    readonly
+                  />
+                </div>
+                <span v-if="errors.profit" class="error-text">{{ errors.profit }}</span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-label-cell">
+                <label for="rent">Renta</label>
+                <span class="field-hint">Renta asociada</span>
+              </div>
+              <div class="form-input-cell">
+                <div class="input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input
+                    id="rent"
+                    v-model.number="form.rent"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    class="form-input"
+                    :class="{ 'error': errors.rent }"
+                    placeholder="0.00"
+                    :disabled="isSubmitting"
+                  />
+                </div>
+                <span v-if="errors.rent" class="error-text">{{ errors.rent }}</span>
+              </div>
+            </div>
+          </template>
+
+          <!-- Cuando ES startup: mostrar Saldo de emprendimiento, Ganancia, Renta -->
+          <template v-else>
+            <div class="form-row">
+              <div class="form-label-cell">
+                <label for="startupAmount">Saldo de emprendimiento <span class="required">*</span></label>
+                <span class="field-hint">Calculado: {{ formatPrice((salesLine?.line_total || 0) - (salesLine?.startup_comission || 0)) }}</span>
               </div>
               <div class="form-input-cell">
                 <div class="input-wrapper">
@@ -343,6 +370,54 @@ const referenceInfo = computed(() => {
                   />
                 </div>
                 <span v-if="errors.startupAmount" class="error-text">{{ errors.startupAmount }}</span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-label-cell">
+                <label for="profit">Ganancia <span class="required">*</span></label>
+                <span class="field-hint">Ref: {{ formatPrice(referenceInfo?.potentialProfit || 0) }} (se ajusta automáticamente según renta)</span>
+              </div>
+              <div class="form-input-cell">
+                <div class="input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input
+                    id="profit"
+                    v-model.number="form.profit"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    class="form-input"
+                    :class="{ 'error': errors.profit }"
+                    placeholder="0.00"
+                    :disabled="isSubmitting"
+                  />
+                </div>
+                <span v-if="errors.profit" class="error-text">{{ errors.profit }}</span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-label-cell">
+                <label for="rent">Renta</label>
+                <span class="field-hint">Renta asociada</span>
+              </div>
+              <div class="form-input-cell">
+                <div class="input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input
+                    id="rent"
+                    v-model.number="form.rent"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    class="form-input"
+                    :class="{ 'error': errors.rent }"
+                    placeholder="0.00"
+                    :disabled="isSubmitting"
+                  />
+                </div>
+                <span v-if="errors.rent" class="error-text">{{ errors.rent }}</span>
               </div>
             </div>
           </template>

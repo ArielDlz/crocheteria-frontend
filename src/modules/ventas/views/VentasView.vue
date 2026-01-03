@@ -352,7 +352,6 @@ const addPaymentMethod = () => {
     const remaining = remainingAmount.value || orderTotal.value
     amount = Math.min(cashReceived.value, remaining)
     cashReceivedAmount = cashReceived.value
-    change = cashReceived.value > amount ? cashReceived.value - amount : 0
   } else {
     // Para otros métodos, usar el monto especificado
     amount = currentPaymentAmount.value
@@ -366,6 +365,11 @@ const addPaymentMethod = () => {
     // Ajustar el monto para que no exceda el total
     amount = orderTotal.value - totalPaid.value
     if (amount <= 0) return
+  }
+  
+  // Recalcular el cambio después de cualquier ajuste del monto (solo para efectivo)
+  if (isCashPayment.value && cashReceivedAmount !== null) {
+    change = cashReceivedAmount > amount ? cashReceivedAmount - amount : 0
   }
   
   const payment = {
@@ -1383,6 +1387,7 @@ onMounted(async () => {
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
