@@ -34,6 +34,15 @@ export const salesService = {
     const response = await api.get(`/sales/${id}`)
     return response.sale || response
   },
+
+  /**
+   * Obtener el balance de ventas del mes actual
+   * @returns {Promise<Object>} Objeto con month y month_sales
+   */
+  async getMonthBalance() {
+    const response = await api.get('/sales/month-balance')
+    return response
+  },
 }
 
 export default salesService
