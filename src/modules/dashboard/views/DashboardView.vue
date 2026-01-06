@@ -10,6 +10,12 @@ const sales = ref([])
 const isLoadingSales = ref(false)
 const salesError = ref(null)
 
+// Estado de ventas del mes
+const monthSales = ref(0)
+const totalSales = ref(0)
+const isLoadingMonthSales = ref(false)
+const monthSalesError = ref(null)
+
 // Cargar ventas recientes
 const loadRecentSales = async () => {
   isLoadingSales.value = true
@@ -67,9 +73,29 @@ const getProductsSummary = (sale) => {
   return `${totalItems} productos (${sale.sales_lines.length} diferentes)`
 }
 
+// Cargar ventas del mes
+const loadMonthSales = async () => {
+  isLoadingMonthSales.value = true
+  monthSalesError.value = null
+  
+  try {
+    const data = await salesService.getMonthBalance()
+    monthSales.value = data.month_sales || 0
+    totalSales.value = data.total_sales || 0
+  } catch (err) {
+    console.error('Error al cargar ventas del mes:', err)
+    monthSalesError.value = err.message || 'Error al cargar las ventas del mes'
+    monthSales.value = 0
+    totalSales.value = 0
+  } finally {
+    isLoadingMonthSales.value = false
+  }
+}
+
 // Cargar ventas al montar
 onMounted(() => {
   loadRecentSales()
+  loadMonthSales()
 })
 </script>
 
@@ -92,7 +118,10 @@ onMounted(() => {
           </svg>
         </div>
         <div class="stat-content">
-          <span class="stat-value">$12,450</span>
+          <span class="stat-value">
+            <span v-if="isLoadingMonthSales">...</span>
+            <span v-else>{{ formatPrice(monthSales) }}</span>
+          </span>
           <span class="stat-label">Ventas del mes</span>
         </div>
         <span class="stat-badge positive">+12%</span>
@@ -107,7 +136,10 @@ onMounted(() => {
           </svg>
         </div>
         <div class="stat-content">
-          <span class="stat-value">89</span>
+          <span class="stat-value">
+            <span v-if="isLoadingMonthSales">...</span>
+            <span v-else>{{ totalSales }}</span>
+          </span>
           <span class="stat-label">Pedidos</span>
         </div>
         <span class="stat-badge positive">+5%</span>
