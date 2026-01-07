@@ -142,6 +142,11 @@ const getProductStock = (productId) => {
 
 // Verificar si un producto puede agregarse a la orden
 const canAddProduct = (product) => {
+  // Si es un servicio, siempre está disponible
+  if (product.isService === true) {
+    return true
+  }
+  
   const stock = product.stock || 0
   if (stock <= 0) return false
   
@@ -156,22 +161,33 @@ const canAddProduct = (product) => {
 
 // Agregar producto a la orden
 const addProductToOrder = (product) => {
-  // Validar que el producto tenga stock disponible
-  const stock = product.stock || 0
-  if (stock <= 0) {
-    return // No agregar productos sin stock
+  // Si es un servicio, no validar stock
+  const isService = product.isService === true
+  
+  if (!isService) {
+    // Validar que el producto tenga stock disponible (solo para productos no-servicio)
+    const stock = product.stock || 0
+    if (stock <= 0) {
+      return // No agregar productos sin stock
+    }
   }
   
   // Verificar si el producto ya está en la orden
   const existingItem = orderItems.value.find(item => item.product._id === product._id)
   
   if (existingItem) {
-    // Si ya existe, incrementar cantidad solo si no excede el stock actual
-    const currentStock = getProductStock(product._id)
-    if (existingItem.quantity < currentStock) {
+    // Si ya existe, incrementar cantidad
+    if (isService) {
+      // Para servicios, siempre se puede incrementar
       existingItem.quantity += 1
-      // Actualizar el stock guardado en el item
-      existingItem.stock = currentStock
+    } else {
+      // Para productos normales, verificar stock
+      const currentStock = getProductStock(product._id)
+      if (existingItem.quantity < currentStock) {
+        existingItem.quantity += 1
+        // Actualizar el stock guardado en el item
+        existingItem.stock = currentStock
+      }
     }
   } else {
     // Si no existe, agregar nuevo item
@@ -179,10 +195,13 @@ const addProductToOrder = (product) => {
       product: {
         _id: product._id,
         name: product.name,
-        sell_price: product.sell_price
+        sell_price: product.sell_price,
+        isService: isService
       },
-      stock: stock, // Guardar el stock disponible
-      quantity: 1
+      stock: isService ? null : (product.stock || 0), // Guardar el stock disponible (null para servicios)
+      quantity: 1,
+      isService: isService,
+      customPrice: null // Precio personalizado (null = usar precio original)
     })
   }
 }
@@ -192,30 +211,83 @@ const removeProductFromOrder = (itemIndex) => {
   orderItems.value.splice(itemIndex, 1)
 }
 
+// Estado para editar precio
+const editingPriceIndex = ref(null)
+const editingPriceValue = ref(0)
+
+// Iniciar edición de precio
+const startEditingPrice = (itemIndex) => {
+  const item = orderItems.value[itemIndex]
+  editingPriceIndex.value = itemIndex
+  editingPriceValue.value = getItemPrice(item)
+}
+
+// Guardar precio editado
+const savePrice = (itemIndex) => {
+  if (editingPriceValue.value < 0) {
+    editingPriceValue.value = 0
+  }
+  orderItems.value[itemIndex].customPrice = editingPriceValue.value
+  editingPriceIndex.value = null
+  editingPriceValue.value = 0
+}
+
+// Cancelar edición de precio
+const cancelPriceEdit = () => {
+  editingPriceIndex.value = null
+  editingPriceValue.value = 0
+}
+
+// Restaurar precio original
+const resetPrice = (itemIndex) => {
+  orderItems.value[itemIndex].customPrice = null
+  if (editingPriceIndex.value === itemIndex) {
+    cancelPriceEdit()
+  }
+}
+
 // Actualizar cantidad de un item
 const updateItemQuantity = (itemIndex, newQuantity) => {
   if (newQuantity <= 0) {
     removeProductFromOrder(itemIndex)
   } else {
     const item = orderItems.value[itemIndex]
-    // Verificar el stock actual del producto (puede haber cambiado)
-    const currentStock = getProductStock(item.product._id)
-    // Limitar la cantidad al stock disponible
-    orderItems.value[itemIndex].quantity = Math.min(newQuantity, currentStock)
+    // Si es un servicio, no limitar por stock
+    if (item.isService === true || item.product.isService === true) {
+      orderItems.value[itemIndex].quantity = newQuantity
+    } else {
+      // Verificar el stock actual del producto (puede haber cambiado)
+      const currentStock = getProductStock(item.product._id)
+      // Limitar la cantidad al stock disponible
+      orderItems.value[itemIndex].quantity = Math.min(newQuantity, currentStock)
+    }
   }
 }
 
 // Verificar si se puede incrementar la cantidad de un item
 const canIncrementQuantity = (item) => {
+  // Si es un servicio, siempre se puede incrementar
+  if (item.isService === true || item.product.isService === true) {
+    return true
+  }
+  
   const currentQuantity = item.quantity || 0
   // Verificar el stock actual del producto (puede haber cambiado)
   const currentStock = getProductStock(item.product._id)
   return currentQuantity < currentStock
 }
 
+// Obtener precio de venta de un item (precio personalizado o precio original)
+const getItemPrice = (item) => {
+  return item.customPrice !== undefined && item.customPrice !== null 
+    ? item.customPrice 
+    : item.product.sell_price
+}
+
 // Calcular total por item
 const getItemTotal = (item) => {
-  return item.product.sell_price * item.quantity
+  const price = getItemPrice(item)
+  return price * item.quantity
 }
 
 // Calcular total de la orden
@@ -474,7 +546,7 @@ const processPayment = async () => {
     const salesLines = orderItems.value.map(item => ({
       product: item.product._id,
       quantity: item.quantity,
-      sell_price: item.product.sell_price,
+      sell_price: getItemPrice(item), // Usar precio personalizado si existe
       line_total: getItemTotal(item)
     }))
     
@@ -620,8 +692,8 @@ onMounted(async () => {
             v-for="product in filteredProducts"
             :key="product._id"
             class="product-card"
-            :class="{ 'disabled': !canAddProduct(product) || (product.stock || 0) <= 0 }"
-            @click="canAddProduct(product) && (product.stock || 0) > 0 ? addProductToOrder(product) : null"
+            :class="{ 'disabled': !canAddProduct(product) || (!product.isService && (product.stock || 0) <= 0) }"
+            @click="canAddProduct(product) && (product.isService || (product.stock || 0) > 0) ? addProductToOrder(product) : null"
           >
             <div class="product-info">
               <h3 class="product-name">{{ product.name }}</h3>
@@ -630,7 +702,10 @@ onMounted(async () => {
             <div class="product-footer">
               <div class="product-price">{{ formatPrice(product.sell_price) }}</div>
               <div class="product-stock">
-                <template v-if="(product.stock || 0) <= 0">
+                <template v-if="product.isService === true">
+                  <span class="service-label">Servicio</span>
+                </template>
+                <template v-else-if="(product.stock || 0) <= 0">
                   <span class="out-of-stock-text">Sin existencias</span>
                 </template>
                 <template v-else>
@@ -695,9 +770,86 @@ onMounted(async () => {
                 </button>
               </div>
             </div>
-            <div class="item-total">
-              <span class="total-label">Total:</span>
-              <span class="total-amount">{{ formatPrice(getItemTotal(item)) }}</span>
+            <div class="item-price-section">
+              <div class="item-price-controls">
+                <div class="item-price-info">
+                  <span class="price-label">Precio unitario:</span>
+                  <div v-if="editingPriceIndex === index" class="price-edit-input">
+                    <input
+                      v-model.number="editingPriceValue"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      class="price-input"
+                      @keyup.enter="savePrice(index)"
+                      @keyup.esc="cancelPriceEdit"
+                      @blur="savePrice(index)"
+                      autofocus
+                    />
+                    <div class="price-edit-actions">
+                      <button 
+                        class="price-action-btn save"
+                        @click="savePrice(index)"
+                        title="Guardar"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                      </button>
+                      <button 
+                        class="price-action-btn cancel"
+                        @click="cancelPriceEdit"
+                        title="Cancelar"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div v-else class="item-price-display">
+                    <span 
+                      class="item-price"
+                      :class="{ 'custom-price': item.customPrice !== undefined && item.customPrice !== null }"
+                    >
+                      {{ formatPrice(getItemPrice(item)) }}
+                    </span>
+                    <div class="price-actions">
+                      <button 
+                        class="edit-price-btn"
+                        @click="startEditingPrice(index)"
+                        title="Editar precio"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                      <button 
+                        v-if="item.customPrice !== undefined && item.customPrice !== null"
+                        class="reset-price-btn"
+                        @click="resetPrice(index)"
+                        title="Restaurar precio original"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="1 4 1 10 7 10"></polyline>
+                          <path d="M3.51 15a11 11 0 1 0 2.13-9.36L1 10"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="item.customPrice !== undefined && item.customPrice !== null && item.customPrice !== item.product.sell_price" class="price-discount-badge">
+                  <span class="original-price">{{ formatPrice(item.product.sell_price) }}</span>
+                  <span class="discount-arrow">→</span>
+                  <span class="new-price">{{ formatPrice(item.customPrice) }}</span>
+                </div>
+              </div>
+              <div class="item-total">
+                <span class="total-label">Total:</span>
+                <span class="total-amount">{{ formatPrice(getItemTotal(item)) }}</span>
+              </div>
             </div>
             <button 
               class="remove-item-btn"
@@ -1133,12 +1285,180 @@ onMounted(async () => {
   text-align: center;
 }
 
+.item-price-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--color-border);
+}
+
+.item-price-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.item-price-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.price-label {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.item-price-display {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.item-price {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.item-price.custom-price {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.price-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.edit-price-btn,
+.reset-price-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.edit-price-btn:hover {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.reset-price-btn:hover {
+  background: var(--color-error);
+  color: white;
+  border-color: var(--color-error);
+}
+
+.price-edit-input {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex: 1;
+}
+
+.price-input {
+  flex: 1;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  text-align: right;
+  min-width: 80px;
+}
+
+.price-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+}
+
+.price-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.price-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.price-action-btn.save {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.price-action-btn.save:hover {
+  background: #10b981;
+  color: white;
+}
+
+.price-action-btn.cancel {
+  background: rgba(229, 62, 62, 0.1);
+  color: var(--color-error);
+}
+
+.price-action-btn.cancel:hover {
+  background: var(--color-error);
+  color: white;
+}
+
+.price-discount-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+.original-price {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+.discount-arrow {
+  color: #F59E0B;
+  font-weight: 700;
+}
+
+.new-price {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
 .item-total {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding-top: var(--spacing-xs);
   border-top: 1px solid var(--color-border);
+  margin-top: var(--spacing-xs);
 }
 
 .total-label {
@@ -1424,6 +1744,12 @@ onMounted(async () => {
 
 .out-of-stock-text {
   color: var(--color-error);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.service-label {
+  color: var(--color-primary);
   font-weight: 700;
   font-size: 0.9rem;
 }
