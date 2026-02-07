@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import Modal from '@/components/common/Modal.vue'
 import { productsService } from '../services/productsService'
 
@@ -27,6 +27,7 @@ const isEditMode = computed(() => !!props.productId)
 const form = ref({
   name: '',
   description: '',
+  comision: '',
   sell_price: '',
   categories: []
 })
@@ -38,6 +39,11 @@ const originalValues = ref({})
 const isLoading = ref(false)
 const isSubmitting = ref(false)
 const errors = ref({})
+
+// Estado para el dropdown de categorías
+const categorySearchQuery = ref('')
+const isDropdownOpen = ref(false)
+const filteredCategories = ref([])
 
 // Extraer IDs de categorías (pueden venir como objetos o como strings)
 const extractCategoryIds = (categories) => {
@@ -68,6 +74,7 @@ const loadProductData = async () => {
     form.value = {
       name: product.name || '',
       description: product.description || '',
+      comision: product.comision || '',
       sell_price: product.sell_price || '',
       categories: categoryIds
     }
@@ -76,9 +83,15 @@ const loadProductData = async () => {
     originalValues.value = {
       name: form.value.name,
       description: form.value.description,
+      comision: form.value.comision,
       sell_price: form.value.sell_price,
       categories: [...categoryIds]
     }
+    
+    // Filtrar categorías después de cargar
+    nextTick(() => {
+      filterCategories()
+    })
   } catch (error) {
     console.error('Error al cargar producto:', error)
     errors.value.load = 'Error al cargar los datos del producto'
@@ -87,19 +100,81 @@ const loadProductData = async () => {
   }
 }
 
-// Toggle de categoría
-const toggleCategory = (categoryId) => {
-  const index = form.value.categories.indexOf(categoryId)
-  if (index > -1) {
-    form.value.categories.splice(index, 1)
+// Filtrar categorías según la búsqueda
+const filterCategories = () => {
+  if (!categorySearchQuery.value.trim()) {
+    filteredCategories.value = props.categories.filter(cat => 
+      !form.value.categories.includes(cat._id)
+    )
   } else {
-    form.value.categories.push(categoryId)
+    const query = categorySearchQuery.value.toLowerCase().trim()
+    filteredCategories.value = props.categories.filter(cat => 
+      !form.value.categories.includes(cat._id) &&
+      cat.name.toLowerCase().includes(query)
+    )
   }
 }
 
-// Verificar si una categoría está seleccionada
-const isCategorySelected = (categoryId) => {
-  return form.value.categories.includes(categoryId)
+// Añadir categoría seleccionada
+const addCategory = (categoryId) => {
+  if (!form.value.categories.includes(categoryId)) {
+    form.value.categories.push(categoryId)
+    categorySearchQuery.value = ''
+    isDropdownOpen.value = false
+    filterCategories()
+  }
+}
+
+// Eliminar categoría (desde chip)
+const removeCategory = (categoryId) => {
+  const index = form.value.categories.indexOf(categoryId)
+  if (index > -1) {
+    form.value.categories.splice(index, 1)
+    filterCategories()
+    
+    // Si se elimina la categoría con comisión por producto, limpiar el campo comisión
+    const category = getCategoryById(categoryId)
+    if (category && 
+        category.comision === true && 
+        (category.comision_type === 'Producto' || category.comision_type === 'Por producto')) {
+      // Verificar si aún hay otra categoría con comisión por producto
+      if (!hasComisionPorProducto.value) {
+        form.value.comision = ''
+        if (errors.value.comision) {
+          delete errors.value.comision
+        }
+      }
+    }
+  }
+}
+
+// Obtener objeto de categoría por ID
+const getCategoryById = (categoryId) => {
+  return props.categories.find(cat => cat._id === categoryId)
+}
+
+// Verificar si alguna categoría seleccionada tiene comisión por producto
+const hasComisionPorProducto = computed(() => {
+  return form.value.categories.some(categoryId => {
+    const category = getCategoryById(categoryId)
+    return category && 
+           category.comision === true && 
+           (category.comision_type === 'Producto' || category.comision_type === 'Por producto')
+  })
+})
+
+// Manejar búsqueda
+const handleSearch = () => {
+  filterCategories()
+  isDropdownOpen.value = true
+}
+
+// Cerrar dropdown al hacer click fuera
+const handleClickOutside = (event) => {
+  const dropdown = event.target.closest('.category-dropdown-wrapper')
+  if (!dropdown) {
+    isDropdownOpen.value = false
+  }
 }
 
 // Validación
@@ -111,6 +186,14 @@ const validate = () => {
   if (!form.value.name.trim()) {
     errors.value.name = 'El nombre es obligatorio'
     isValid = false
+  }
+
+  // Comisión (obligatorio solo si hay categoría con comisión por producto)
+  if (hasComisionPorProducto.value) {
+    if (!form.value.comision || form.value.comision <= 0) {
+      errors.value.comision = 'Ingresa un monto de comisión válido'
+      isValid = false
+    }
   }
 
   // Precio de venta
@@ -132,6 +215,21 @@ const getChangedFields = () => {
 
   if (form.value.description !== originalValues.value.description) {
     changed.description = form.value.description.trim()
+  }
+
+  // Comisión: solo incluir si hay categoría con comisión por producto
+  if (hasComisionPorProducto.value) {
+    const currentComision = Number(form.value.comision || 0)
+    const originalComision = Number(originalValues.value.comision || 0)
+    if (currentComision !== originalComision) {
+      changed.comision = currentComision
+    }
+  } else {
+    // Si no hay categoría con comisión por producto, no enviar comisión
+    // (o enviar null si antes tenía valor)
+    if (originalValues.value.comision) {
+      changed.comision = null
+    }
   }
 
   if (Number(form.value.sell_price) !== Number(originalValues.value.sell_price)) {
@@ -178,6 +276,11 @@ const handleSubmit = async () => {
         categories: form.value.categories
       }
 
+      // Solo incluir comisión si hay categoría con comisión por producto
+      if (hasComisionPorProducto.value && form.value.comision) {
+        productData.comision = Number(form.value.comision)
+      }
+
       await productsService.createProduct(productData)
       emit('success', { type: 'create', data: productData })
     }
@@ -196,13 +299,22 @@ const handleClose = () => {
   form.value = {
     name: '',
     description: '',
+    comision: '',
     sell_price: '',
     categories: []
   }
   originalValues.value = {}
   errors.value = {}
+  categorySearchQuery.value = ''
+  isDropdownOpen.value = false
+  document.removeEventListener('click', handleClickOutside)
   emit('close')
 }
+
+// Limpiar listener al desmontar
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 // Cargar datos cuando se abre el modal
 watch(() => props.isOpen, (newVal) => {
@@ -214,19 +326,53 @@ watch(() => props.isOpen, (newVal) => {
       form.value = {
         name: '',
         description: '',
+        comision: '',
         sell_price: '',
         categories: []
       }
       errors.value = {}
     }
+    // Inicializar filtrado de categorías
+    categorySearchQuery.value = ''
+    isDropdownOpen.value = false
+    filterCategories()
+    
+    // Añadir listener para cerrar dropdown al hacer click fuera
+    if (newVal) {
+      nextTick(() => {
+        document.addEventListener('click', handleClickOutside)
+      })
+    }
+  } else {
+    // Remover listener cuando se cierra el modal
+    document.removeEventListener('click', handleClickOutside)
   }
+})
+
+// Filtrar cuando cambian las categorías disponibles o las seleccionadas
+watch(() => [props.categories, form.value.categories], () => {
+  filterCategories()
+}, { deep: true })
+
+// Filtrar cuando cambia la búsqueda
+watch(() => categorySearchQuery.value, () => {
+  filterCategories()
 })
 
 // Computed para verificar si el formulario es válido
 const isFormValid = computed(() => {
-  return form.value.name.trim() !== '' && 
-         form.value.sell_price && 
-         Number(form.value.sell_price) > 0
+  const baseValid = form.value.name.trim() !== '' && 
+                    form.value.sell_price && 
+                    Number(form.value.sell_price) > 0
+  
+  // Si hay categoría con comisión por producto, también validar comisión
+  if (hasComisionPorProducto.value) {
+    return baseValid && 
+           form.value.comision && 
+           Number(form.value.comision) > 0
+  }
+  
+  return baseValid
 })
 
 // Título del modal
@@ -298,6 +444,120 @@ const modalTitle = computed(() => {
         ></textarea>
       </div>
 
+      <!-- Categorías -->
+      <div class="form-group">
+        <label>Categorías</label>
+        <p class="field-hint">Busca y selecciona las categorías a las que pertenece este producto</p>
+        
+        <div v-if="categories.length === 0" class="no-categories">
+          <span>No hay categorías disponibles</span>
+        </div>
+        
+        <div v-else class="category-dropdown-wrapper">
+          <!-- Input de búsqueda -->
+          <div class="category-search-input">
+            <input
+              type="text"
+              v-model="categorySearchQuery"
+              @input="handleSearch"
+              @focus="isDropdownOpen = true"
+              placeholder="Buscar categoría..."
+              :disabled="isLoading"
+              class="search-input"
+            />
+            <svg 
+              v-if="!isDropdownOpen" 
+              class="search-icon" 
+              width="18" 
+              height="18" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              stroke-width="2"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <svg 
+              v-else 
+              class="search-icon close-icon" 
+              width="18" 
+              height="18" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              stroke-width="2"
+              @click="isDropdownOpen = false; categorySearchQuery = ''"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </div>
+
+          <!-- Dropdown de resultados -->
+          <div v-if="isDropdownOpen && filteredCategories.length > 0" class="category-dropdown">
+            <div
+              v-for="category in filteredCategories"
+              :key="category._id"
+              class="dropdown-item"
+              @click="addCategory(category._id)"
+            >
+              {{ category.name }}
+            </div>
+          </div>
+
+          <!-- Mensaje cuando no hay resultados -->
+          <div v-if="isDropdownOpen && filteredCategories.length === 0 && categorySearchQuery.trim()" class="no-results">
+            No se encontraron categorías que coincidan con "{{ categorySearchQuery }}"
+          </div>
+
+          <!-- Chips de categorías seleccionadas -->
+          <div v-if="form.categories.length > 0" class="category-chips">
+            <div
+              v-for="categoryId in form.categories"
+              :key="categoryId"
+              class="category-chip"
+            >
+              <span class="chip-label">{{ getCategoryById(categoryId)?.name || 'Categoría' }}</span>
+              <button
+                type="button"
+                class="chip-remove"
+                @click="removeCategory(categoryId)"
+                :disabled="isLoading"
+                title="Eliminar categoría"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Campo Comisión (solo si hay categoría con comisión por producto) -->
+      <div v-if="hasComisionPorProducto" class="form-group">
+        <label for="comision">
+          Comisión <span class="required">*</span>
+        </label>
+        <div class="input-with-prefix">
+          <span class="input-prefix">$</span>
+          <input
+            type="number"
+            id="comision"
+            v-model="form.comision"
+            placeholder="0.00"
+            min="0"
+            step="0.01"
+            :class="{ 'error': errors.comision }"
+            :disabled="isLoading"
+          />
+          <span class="input-suffix">MXN</span>
+        </div>
+        <span v-if="errors.comision" class="field-error">{{ errors.comision }}</span>
+      </div>
+
       <!-- Campo Precio de Venta -->
       <div class="form-group">
         <label for="sell_price">
@@ -318,42 +578,6 @@ const modalTitle = computed(() => {
           <span class="input-suffix">MXN</span>
         </div>
         <span v-if="errors.sell_price" class="field-error">{{ errors.sell_price }}</span>
-      </div>
-
-      <!-- Categorías -->
-      <div class="form-group">
-        <label>Categorías</label>
-        <p class="field-hint">Selecciona las categorías a las que pertenece este producto</p>
-        
-        <div v-if="categories.length === 0" class="no-categories">
-          <span>No hay categorías disponibles</span>
-        </div>
-        
-        <div v-else class="categories-grid">
-          <label
-            v-for="category in categories"
-            :key="category._id"
-            class="category-checkbox"
-            :class="{ 'selected': isCategorySelected(category._id) }"
-          >
-            <input
-              type="checkbox"
-              :checked="isCategorySelected(category._id)"
-              @change="toggleCategory(category._id)"
-              :disabled="isLoading"
-            />
-            <span class="checkbox-custom">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </span>
-            <span class="category-name">{{ category.name }}</span>
-          </label>
-        </div>
-        
-        <span class="selected-count">
-          {{ form.categories.length }} categoría{{ form.categories.length !== 1 ? 's' : '' }} seleccionada{{ form.categories.length !== 1 ? 's' : '' }}
-        </span>
       </div>
     </form>
 
@@ -526,71 +750,153 @@ const modalTitle = computed(() => {
   animation: spin 0.8s linear infinite;
 }
 
-/* Categories Grid */
-.categories-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--spacing-sm);
+/* Category Dropdown */
+.category-dropdown-wrapper {
+  position: relative;
   margin-top: var(--spacing-sm);
 }
 
-.category-checkbox {
+.category-search-input {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: 0.6rem 0.8rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.875rem 2.5rem 0.875rem 1rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border-color var(--transition-fast);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(107, 76, 154, 0.1);
+}
+
+.search-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--color-background);
+}
+
+.search-icon {
+  position: absolute;
+  right: 0.75rem;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.close-icon {
+  pointer-events: all;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.close-icon:hover {
+  color: var(--color-error);
+}
+
+.category-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.25rem;
   background: var(--color-white);
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.dropdown-item {
+  padding: 0.75rem 1rem;
   cursor: pointer;
-  transition: all var(--transition-fast);
-  font-weight: normal;
+  transition: background-color var(--transition-fast);
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
 }
 
-.category-checkbox:hover {
-  border-color: var(--color-primary);
-  background: rgba(107, 76, 154, 0.02);
-}
-
-.category-checkbox.selected {
-  border-color: var(--color-primary);
+.dropdown-item:hover {
   background: rgba(107, 76, 154, 0.05);
 }
 
-.category-checkbox input {
-  display: none;
+.dropdown-item:first-child {
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
-.checkbox-custom {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-sm);
+.dropdown-item:last-child {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.no-results {
+  padding: 0.75rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  margin-top: 0.25rem;
+}
+
+/* Category Chips */
+.category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0.5rem 0.75rem;
+  background: rgba(107, 76, 154, 0.1);
+  border: 1px solid rgba(107, 76, 154, 0.2);
+  border-radius: var(--radius-full);
+  font-size: 0.875rem;
+}
+
+.chip-label {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.chip-remove {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  border-radius: 50%;
   transition: all var(--transition-fast);
+  padding: 0;
   flex-shrink: 0;
 }
 
-.checkbox-custom svg {
-  opacity: 0;
-  color: white;
-  transition: opacity var(--transition-fast);
+.chip-remove:hover {
+  background: rgba(107, 76, 154, 0.2);
+  color: var(--color-error);
 }
 
-.category-checkbox.selected .checkbox-custom {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+.chip-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.category-checkbox.selected .checkbox-custom svg {
-  opacity: 1;
-}
-
-.category-name {
-  font-size: 0.9rem;
-  color: var(--color-text-primary);
+.chip-remove svg {
+  width: 14px;
+  height: 14px;
 }
 
 .no-categories {
@@ -600,12 +906,6 @@ const modalTitle = computed(() => {
   background: var(--color-background);
   border-radius: var(--radius-md);
   font-size: 0.9rem;
-}
-
-.selected-count {
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  margin-top: var(--spacing-xs);
 }
 
 @keyframes spin {
