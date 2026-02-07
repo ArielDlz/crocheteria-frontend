@@ -16,6 +16,9 @@ const permissions = ref([])
 const isLoading = ref(true)
 const isAuthenticatedState = ref(false)
 
+// Promesa de inicialización para asegurar que se complete antes de usar el composable
+let initializationPromise = null
+
 // Inicializar estado verificando con el backend
 const initializeAuth = async () => {
   try {
@@ -40,8 +43,15 @@ const initializeAuth = async () => {
   }
 }
 
-// Ejecutar al cargar el módulo
-initializeAuth()
+// Inicializar inmediatamente y guardar la promesa
+initializationPromise = initializeAuth()
+
+// Función helper para esperar a que la inicialización termine
+export const waitForAuthInit = async () => {
+  if (initializationPromise) {
+    await initializationPromise
+  }
+}
 
 export function useAuth() {
   const { refreshPermissions, clearPermissions } = usePermissions()

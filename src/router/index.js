@@ -4,7 +4,7 @@
  */
 
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuth } from '@/modules/auth'
+import { useAuth, waitForAuthInit } from '@/modules/auth'
 
 // Layouts - Lazy loading
 const MainLayout = () => import('@/layouts/MainLayout.vue')
@@ -154,13 +154,11 @@ const router = createRouter({
 
 // Guard de navegación - Proteger rutas
 router.beforeEach(async (to, from, next) => {
-  const { isAuthenticated, checkAuth, isLoading } = useAuth()
+  // Esperar a que la inicialización de autenticación termine antes de continuar
+  await waitForAuthInit()
+  
+  const { isAuthenticated, checkAuth } = useAuth()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-
-  // Si aún está cargando la autenticación, esperar
-  if (isLoading.value) {
-    await checkAuth()
-  }
 
   // Si la ruta requiere autenticación
   if (requiresAuth) {

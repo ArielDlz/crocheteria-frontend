@@ -11,6 +11,6 @@ export { default as LoginForm } from './components/LoginForm.vue'
 export { authService } from './services/authService'
 
 // Composables
-export { useAuth } from './composables/useAuth'
+export { useAuth, waitForAuthInit } from './composables/useAuth'
 export { usePermissions } from './composables/usePermissions'
 
