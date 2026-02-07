@@ -173,9 +173,18 @@ onMounted(() => {
 
               <!-- Monto de la comisión -->
               <td>
-                <template v-if="category.comision && category.comision_ammount">
-                  <span class="amount-text">{{ category.comision_ammount }}</span>
-                  <span class="currency-text">{{ category.comision_type === 'Porcentaje' ? ' %' : ' MXN' }}</span>
+                <template v-if="category.comision">
+                  <!-- Si el tipo es Producto, mostrar mensaje especial -->
+                  <template v-if="category.comision_type === 'Producto' || category.comision_type === 'Por producto'">
+                    <span class="product-commission-text">Definido por producto</span>
+                  </template>
+                  <!-- Si tiene monto, mostrar monto y tipo -->
+                  <template v-else-if="category.comision_ammount">
+                    <span class="amount-text">{{ category.comision_ammount }}</span>
+                    <span class="currency-text">{{ category.comision_type === 'Porcentaje' ? ' %' : ' MXN' }}</span>
+                  </template>
+                  <!-- Si no tiene monto pero tiene comisión activa -->
+                  <span v-else class="text-muted">-</span>
                 </template>
                 <span v-else class="text-muted">-</span>
               </td>
@@ -412,6 +421,13 @@ onMounted(() => {
 
 .text-muted {
   color: var(--color-text-muted);
+}
+
+/* Product Commission Text */
+.product-commission-text {
+  font-style: italic;
+  color: var(--color-primary);
+  font-size: 0.9rem;
 }
 
 /* Actions Column */

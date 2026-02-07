@@ -68,6 +68,11 @@ const selectedComisionLabel = computed(() => {
   return selected ? selected.label : ''
 })
 
+// Verificar si "Por producto" está seleccionado
+const isPorProducto = computed(() => {
+  return form.value.comision_type === 'Producto' || form.value.comision_type === 'Por producto'
+})
+
 // Cargar datos de la categoría para edición
 const loadCategoryData = async () => {
   if (!props.categoryId) return
@@ -129,7 +134,9 @@ const validate = () => {
       errors.value.comision_type = 'Selecciona un tipo de comisión'
       isValid = false
     }
-    if (!form.value.comision_ammount || form.value.comision_ammount <= 0) {
+    // Solo validar monto si NO es "Por producto"
+    const isPorProducto = form.value.comision_type === 'Producto' || form.value.comision_type === 'Por producto'
+    if (!isPorProducto && (!form.value.comision_ammount || form.value.comision_ammount <= 0)) {
       errors.value.comision_ammount = 'Ingresa un monto de comisión válido'
       isValid = false
     }
@@ -161,11 +168,13 @@ const getChangedFields = () => {
   }
 
   if (form.value.comision_type !== originalValues.value.comision_type) {
-    changed.comision_type = form.value.comision ? form.value.comision_type : ''
+    const isPorProducto = form.value.comision_type === 'Producto' || form.value.comision_type === 'Por producto'
+    changed.comision_type = form.value.comision ? (isPorProducto ? 'Producto' : form.value.comision_type) : ''
   }
 
   if (form.value.comision_ammount !== originalValues.value.comision_ammount) {
-    changed.comision_ammount = form.value.comision ? Number(form.value.comision_ammount) : 0
+    const isPorProducto = form.value.comision_type === 'Producto' || form.value.comision_type === 'Por producto'
+    changed.comision_ammount = form.value.comision ? (isPorProducto ? 0 : Number(form.value.comision_ammount)) : 0
   }
 
   if (form.value.startup !== originalValues.value.startup) {
@@ -201,12 +210,13 @@ const handleSubmit = async () => {
       emit('success', { type: 'update', categoryId: props.categoryId, data: changedFields })
     } else {
       // Modo creación: enviar todos los campos
+      const isPorProducto = form.value.comision_type === 'Producto' || form.value.comision_type === 'Por producto'
       const categoryData = {
         name: form.value.name.trim(),
         description: form.value.description.trim(),
         comision: form.value.comision,
-        comision_type: form.value.comision ? form.value.comision_type : '',
-        comision_ammount: form.value.comision ? Number(form.value.comision_ammount) : 0,
+        comision_type: form.value.comision ? (isPorProducto ? 'Producto' : form.value.comision_type) : '',
+        comision_ammount: form.value.comision ? (isPorProducto ? 0 : Number(form.value.comision_ammount)) : 0,
         startup: form.value.startup,
         startup_name: form.value.startup ? form.value.startup_name.trim() : ''
       }
@@ -275,6 +285,16 @@ watch(() => form.value.comision, (newVal) => {
   }
 })
 
+// Limpiar monto cuando se selecciona "Por producto"
+watch(() => form.value.comision_type, (newVal) => {
+  const isPorProducto = newVal === 'Producto' || newVal === 'Por producto'
+  if (isPorProducto) {
+    form.value.comision_ammount = ''
+    // Limpiar error si existía
+    if (errors.value.comision_ammount) delete errors.value.comision_ammount
+  }
+})
+
 // Limpiar startup_name cuando startup se desactiva
 watch(() => form.value.startup, (newVal) => {
   if (!newVal) {
@@ -295,10 +315,10 @@ const isFormValid = computed(() => {
   if (!baseValid) return false
   
   // Validar campos de comisión si está activo
+  const isPorProducto = form.value.comision_type === 'Producto' || form.value.comision_type === 'Por producto'
   const comisionValid = !form.value.comision || (
     form.value.comision_type && 
-    form.value.comision_ammount && 
-    Number(form.value.comision_ammount) > 0
+    (isPorProducto || (form.value.comision_ammount && Number(form.value.comision_ammount) > 0))
   )
   
   // Validar startup si está activo
@@ -433,8 +453,8 @@ const modalTitle = computed(() => {
             <span v-if="errors.comision_type" class="field-error">{{ errors.comision_type }}</span>
           </div>
 
-          <!-- Monto de Comisión -->
-          <div class="form-group">
+          <!-- Monto de Comisión (oculto si es Por producto) -->
+          <div v-if="!isPorProducto" class="form-group">
             <label for="comision_ammount">
               Monto de comisión <span class="required">*</span>
             </label>
@@ -452,6 +472,18 @@ const modalTitle = computed(() => {
               <span class="input-suffix">{{ selectedComisionLabel }}</span>
             </div>
             <span v-if="errors.comision_ammount" class="field-error">{{ errors.comision_ammount }}</span>
+          </div>
+
+          <!-- Mensaje cuando es Por producto -->
+          <div v-if="isPorProducto" class="form-group">
+            <div class="info-message">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span>El monto de la comisión se establecerá en cada producto</span>
+            </div>
           </div>
         </div>
       </transition>
@@ -816,6 +848,23 @@ const modalTitle = computed(() => {
   padding: var(--spacing-sm);
   color: var(--color-text-muted);
   font-size: 0.9rem;
+}
+
+/* Info Message */
+.info-message {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 0.75rem 1rem;
+  background: rgba(107, 76, 154, 0.1);
+  border: 1px solid rgba(107, 76, 154, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--color-primary);
+  font-size: 0.875rem;
+}
+
+.info-message svg {
+  flex-shrink: 0;
 }
 
 /* Startup Name Field */
